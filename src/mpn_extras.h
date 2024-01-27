@@ -254,13 +254,69 @@ mp_limb_t flint_mpn_mulhigh_n(mp_ptr rp, mp_srcptr xp, mp_srcptr yp, mp_size_t n
     return flint_mpn_mulhigh_n_func_tab[n - 1](rp, xp, yp);
 }
 
+struct mp_limb_pair_t _flint_mpn_mulhigh_normalised_n(mp_ptr rp, mp_srcptr xp, mp_srcptr yp, mp_size_t n);
+
+/* NOTE: Aliasing allowed! */
 FLINT_FORCE_INLINE
 struct mp_limb_pair_t flint_mpn_mulhigh_normalised_n(mp_ptr rp, mp_srcptr xp, mp_srcptr yp, mp_size_t n)
 {
     FLINT_ASSERT(n >= 1);
-    FLINT_ASSERT(FLINT_HAVE_MULHIGH_N_FUNC(n));
 
-    return flint_mpn_mulhigh_normalised_n_func_tab[n - 1](rp, xp, yp);
+#if FLINT_MPN_MULHIGH_N_FUNC_TAB_WIDTH != 0
+    if (FLINT_HAVE_MULHIGH_N_FUNC(n))
+        return flint_mpn_mulhigh_normalised_n_func_tab[n - 1](rp, xp, yp);
+#else
+    if (n == 1)
+    {
+        struct mp_limb_pair_t res;
+
+        umul_ppmm(rp[0], res.m1, xp[0], yp[0]);
+
+        res.m2 = !(rp[0] >> (FLINT_BITS - 1));
+        rp[0] = (rp[0] << res.m2) | ((res.m1 >> (FLINT_BITS - 1)) & res.m2);
+        res.m1 <<= res.m2;
+
+        return res;
+    }
+    else if (n == 2)
+    {
+        struct mp_limb_pair_t res;
+        mp_limb_t sc, r0, r1, r2, cy;
+
+        umul_ppmm(r0, sc, xp[0], yp[0]);
+        umul_ppmm(r1, sc, xp[1], yp[0]);
+        add_ssaaaa(r1, r0, r1, r0, UWORD(0), sc);
+
+        umul_ppmm(r2, sc, xp[0], yp[1]);
+        add_ssaaaa(r1, r0, r1, r0, r2, sc);
+        cy = (r1 < r2);
+        umul_ppmm(r2, sc, xp[1], yp[1]);
+        add_ssaaaa(r2, r1, r2, r1, cy, sc);
+
+        if ((r2 & (UWORD(1) << 63)) == UWORD(0))
+        {
+            /* We need to normalise */
+            res.m2 = 1;
+            add_sssaaaaaa(r2, r1, r0, r2, r1, r0, r2, r1, r0);
+        }
+        else
+        {
+            res.m2 = 0;
+        }
+
+        res.m1 = r0;
+        rp[0] = r1;
+        rp[1] = r2;
+
+        return res;
+    }
+#endif
+#if FLINT_HAVE_MPN_MULHIGH_NORMALISED_N_BASECASE
+    else if (n < MPN_MULHIGH_NORMALISED_N_BASECASE_CUTOFF)
+        return flint_mpn_mulhigh_normalised_n_basecase(rp, xp, yp, n);
+#endif
+    else
+        return _flint_mpn_mulhigh_normalised_n(rp, xp, yp, n);
 }
 
 /*
