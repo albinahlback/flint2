@@ -94,7 +94,7 @@ _flint_mpn_mulhigh_normalised_n(mp_ptr rp, mp_srcptr xp, mp_srcptr yp, mp_size_t
 
     rp_tmp = GR_TMP_ALLOC(2 * sizeof(mp_limb_t) * n);
 
-#if !FLINT_HAVE_GENERAL_MPN_MULHIGH_NORMALISED_N
+#if !FLINT_HAVE_MPN_MULHIGH_NORMALISED_N_BASECASE
     if (n < CUTOFF)
     {
         slong ix;

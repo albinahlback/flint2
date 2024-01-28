@@ -121,7 +121,7 @@ SIZE($(funname), .$(funname)_end)
 end
 
 ###############################################################################
-# mulhigh
+# mulhigh, hardcoded
 ###############################################################################
 
 function mulhigh_1()
@@ -373,6 +373,136 @@ function mulhigh(n::Int; debug::Bool = false)
         print(body * "\tret\n")
     else
         return body * "\tret\n"
+    end
+end
+
+# Products we calculate, where h stands for upper result only:
+#          b_{0}   b_{1}  ...  b_{n-3} b_{n-2} b_{n-1}
+#  a_{0}                  ...             h       x
+#  a_{1}                  ...     h       x       x
+#  a_{2}                  ...     x       x       x
+#  ...
+#  ...
+# a_{n-3}            h    ...     x       x       x
+# a_{n-2}    h       x    ...     x       x       x
+# a_{n-1}    x       x    ...     x       x       x
+#
+# Herein we assume that n > 7 or something. FIXME: Define limit.
+function mulhigh_basecase(debug::Bool = false)
+    k = 7
+
+    if debug
+        res = "res"
+        ap = "ap"
+        bp_old = "bp_old"
+        bp = "bp"
+        n = "n"
+
+        sc = "sc"
+        zr = "zr"
+    else
+        res = _regs[1]
+        ap = _regs[2]
+        bp_old = _regs[3] # rdx
+        bp = _regs[4] # rdx is used by mulx, so we need to switch register for bp
+        n = _regs[5]
+
+        ap_save = "-1*8(%rsp)\n"
+        bp_save = "-2*8(%rsp)\n"
+        n_save = "-3*8(%rsp)\n"
+
+        sc = _regs[6] # scrap register
+        zr = _regs[7] # zero
+        cy = _regs[8] # carry for next chain
+        ret = _regs[9] # return value, i.e the lowest limb
+
+        _r = __regs[1:6]
+    end
+
+    r(ix::Int) = debug ? "r($ix)" : (ix <= 6 && ix >= 0) ? _r[ix + 1] : cy
+
+    # Push
+    body = ""
+    for reg in __regs
+        body *= "\tpush\t$reg\n"
+    end
+    body *= "\n"
+
+    # Prepare
+    # body *= "\tmov\t$ap, $ap_save\n"
+    # body *= "\tmov\t$bp_old, $bp_save\n"
+    # body *= "\tmov\t$n, $n_save\n"
+    # body *= "\tmov\t$bp_old, $bp\n"
+
+    body *= "\tlea\t-$(k + 1)*8($ap,$n,8), $ap\n"
+    body *= "\tmov\t0*8($bp_old), %rdx\n"
+    body *= "\txor\t$(R32(zr)), $(R32(zr))\n"
+    body *= "\n"
+
+    # Triangle
+    body *= "\tmulx\t$(k - 1)*8($ap), $sc, $ret\n"
+    body *= "\tmulx\t$(k - 0)*8($ap), $sc, $(r(0))\n"
+    body *= "\tadcx\t$sc, $ret\n"
+    body *= "\tadcx\t$zr, $(r(0))\n"
+    for ix in 1:k - 1
+        body *= "\tmov\t$ix*8($bp), %rdx\n"
+        body *= "\tmulx\t$(k - 1 - ix)*8($ap), $sc, $(r(ix + 1))\n"
+        body *= "\tmulx\t$(k - 0 - ix)*8($ap), $sc, $(r(ix + 0))\n"
+        body *= "\tadcx\t$(r(ix + 1)), $ret\n"
+        body *= "\tadox\t$sc, $ret\n"
+        body *= "\tadcx\t$(r(ix + 0)), $(r(0))\n"
+        for jx in 2:ix
+            body *= "\tmulx\t$(k - 2 + jx - ix)*8($ap), $sc, $(r(ix))\n"
+            body *= "\tadox\t$sc, $(r(jx - 2))\n"
+            body *= "\tadcx\t$(r(ix)), $(r(jx - 1))\n"
+        end
+        body *= "\tmulx\t$(k - 0)*8($ap), $sc, $(r(ix + 0))\n"
+        body *= "\tadox\t$sc, $(r(ix - 1))\n"
+        body *= "\tadcx\t$zr, $(r(ix + 0))\n"
+        body *= "\tadox\t$zr, $(r(ix + 0))\n"
+        body *= "\n"
+    end
+
+    # Crooked rectangle
+    body *= "\tlea\t$k*8($bp), $bp\n"
+    body *= "\tlea\t$k*8($bp), $ap\n"
+    for ix in 0:k - 2
+        body *= "\tmulx\t$ix*8($ap), $sc, $(r(k))\n"
+        if ix % 2 == 0
+            body *= "\tadcx\t$sc, $(r(ix + 0))\n"
+            body *= "\tadcx\t$(r(7)), $(r(ix + 1))\n"
+        else
+            body *= "\tadox\t$sc, $(r(ix + 0))\n"
+            body *= "\tadox\t$(r(n)), $(r(ix + 1))\n"
+        end
+    end
+    body *= "\tmulx\t$(n - 1)*8($ap), $sc, $(r(n))\n"
+    if (n - 1) % 2 == 0
+        body *= "\tadcx\t$sc, $(r(n - 1))\n"
+    else
+        body *= "\tadox\t$sc, $(r(n - 1))\n"
+    end
+    body *= "\tadcx\t$zr, $(r(n))\n"
+    body *= "\tadox\t$zr, $(r(n))\n"
+    body *= "\n"
+
+    # Store result
+    for ix in 1:n
+        body *= "\tmov\t$(r(ix)), $(ix - 1)*8($res)\n"
+    end
+    body *= "\n"
+
+    # Pop
+    for reg in reverse(__regs)
+        body *= "\tpop\t$reg\n"
+    end
+    body *= "\n"
+
+    body *= "\tret\n"
+    if debug
+        print(body)
+    else
+        return body
     end
 end
 
