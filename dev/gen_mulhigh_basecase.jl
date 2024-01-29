@@ -389,7 +389,7 @@ end
 #
 # Herein we assume that n > 7 or something. FIXME: Define limit.
 function mulhigh_basecase(debug::Bool = false)
-    k = 7
+    k = 6
 
     if debug
         res = "res"
@@ -419,7 +419,7 @@ function mulhigh_basecase(debug::Bool = false)
         _r = __regs[1:6]
     end
 
-    r(ix::Int) = debug ? "r($ix)" : (ix <= 6 && ix >= 0) ? _r[ix + 1] : cy
+    r(ix::Int) = debug ? "r($ix)" : (0 <= ix < k) ? _r[ix + 1] : cy
 
     # Push
     body = ""
@@ -432,10 +432,11 @@ function mulhigh_basecase(debug::Bool = false)
     # body *= "\tmov\t$ap, $ap_save\n"
     # body *= "\tmov\t$bp_old, $bp_save\n"
     # body *= "\tmov\t$n, $n_save\n"
-    # body *= "\tmov\t$bp_old, $bp\n"
 
-    body *= "\tlea\t-$(k + 1)*8($ap,$n,8), $ap\n"
+    body *= "\tmov\t$bp_old, $bp\n"
     body *= "\tmov\t0*8($bp_old), %rdx\n"
+    body *= "\tlea\t-$(k + 1)*8($ap,$n,8), $ap\n" # ap <- ap + n - k - 1
+    body *= "\tlea\t$(k - 1)*8($bp), $bp\n" # bp <- bp + k - 1
     body *= "\txor\t$(R32(zr)), $(R32(zr))\n"
     body *= "\n"
 
@@ -444,8 +445,9 @@ function mulhigh_basecase(debug::Bool = false)
     body *= "\tmulx\t$(k - 0)*8($ap), $sc, $(r(0))\n"
     body *= "\tadcx\t$sc, $ret\n"
     body *= "\tadcx\t$zr, $(r(0))\n"
+    body *= "\n"
     for ix in 1:k - 1
-        body *= "\tmov\t$ix*8($bp), %rdx\n"
+        body *= "\tmov\t$(ix - k + 1)*8($bp), %rdx\n"
         body *= "\tmulx\t$(k - 1 - ix)*8($ap), $sc, $(r(ix + 1))\n"
         body *= "\tmulx\t$(k - 0 - ix)*8($ap), $sc, $(r(ix + 0))\n"
         body *= "\tadcx\t$(r(ix + 1)), $ret\n"
@@ -462,33 +464,36 @@ function mulhigh_basecase(debug::Bool = false)
         body *= "\tadox\t$zr, $(r(ix + 0))\n"
         body *= "\n"
     end
+    body *= "\tlea\t-$k($n), $n\n"
 
     # Crooked rectangle
-    body *= "\tlea\t$k*8($bp), $bp\n"
-    body *= "\tlea\t$k*8($bp), $ap\n"
+    body *= ".Lloop:\n"
+    body *= "\tlea\t1*8($ap), $ap\n"
+    body *= "\tlea\t1*8($bp), $bp\n"
     for ix in 0:k - 2
         body *= "\tmulx\t$ix*8($ap), $sc, $(r(k))\n"
         if ix % 2 == 0
             body *= "\tadcx\t$sc, $(r(ix + 0))\n"
-            body *= "\tadcx\t$(r(7)), $(r(ix + 1))\n"
+            body *= "\tadcx\t$(r(k)), $(r(ix + 1))\n"
         else
             body *= "\tadox\t$sc, $(r(ix + 0))\n"
-            body *= "\tadox\t$(r(n)), $(r(ix + 1))\n"
+            body *= "\tadox\t$(r(k)), $(r(ix + 1))\n"
         end
     end
-    body *= "\tmulx\t$(n - 1)*8($ap), $sc, $(r(n))\n"
-    if (n - 1) % 2 == 0
-        body *= "\tadcx\t$sc, $(r(n - 1))\n"
+    body *= "\tmulx\t$(k - 1)*8($ap), $sc, $(r(k))\n"
+    if (k - 1) % 2 == 0
+        body *= "\tadcx\t$sc, $(r(k - 1))\n"
     else
-        body *= "\tadox\t$sc, $(r(n - 1))\n"
+        body *= "\tadox\t$sc, $(r(k - 1))\n"
     end
-    body *= "\tadcx\t$zr, $(r(n))\n"
-    body *= "\tadox\t$zr, $(r(n))\n"
-    body *= "\n"
-
-    # Store result
-    for ix in 1:n
-        body *= "\tmov\t$(r(ix)), $(ix - 1)*8($res)\n"
+    body *= "\tadcx\t$zr, $(r(k))\n"
+    body *= "\tadox\t$zr, $(r(k))\n"
+    body *= "\tdec\t$n\n"
+    body *= "\tlea\t$k*8($res), $res\n"
+    body *= "\ttest\t$n, $n\n"
+    body *= "\tjnz\t.Lloop\n"
+    for ix in 0:k - 1
+        body *= "\tmov\t$(r(ix)), $ix*8($res)\n"
     end
     body *= "\n"
 
@@ -799,6 +804,22 @@ end
 # Generate file
 ###############################################################################
 
+function gen_mulhigh_basecase(nofile::Bool = false)
+    (pre, post) = function_pre_post("flint_mpn_mulhigh_basecase")
+    functionbody = mulhigh_basecase()
+
+    str = "$copyright\n$preamble\n$pre$functionbody$post"
+
+    if nofile
+        print(str)
+    else
+        path = String(@__DIR__) * "/../src/mpn_extras/broadwell/mulhigh_basecase.asm"
+        file = open(path, "w")
+        write(file, str)
+        close(file)
+    end
+end
+
 function gen_mulhigh(m::Int, nofile::Bool = false)
     (pre, post) = function_pre_post("flint_mpn_mulhigh_$m")
     functionbody = mulhigh(m)
@@ -832,6 +853,7 @@ function gen_mulhigh_normalised(m::Int, nofile::Bool = false)
 end
 
 function gen_all()
+    gen_mulhigh_basecase()
     for m in 1:12
         gen_mulhigh(m)
     end
