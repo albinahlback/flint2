@@ -111,6 +111,8 @@ TEST_FUNCTION_START(flint_mpn_mulhigh_n, state)
 
     TEST_FUNCTION_END(state);
 }
+# undef TEST_MPFR
+# undef N_MAX
 #else
 TEST_FUNCTION_START(flint_mpn_mulhigh_n, state)
 {

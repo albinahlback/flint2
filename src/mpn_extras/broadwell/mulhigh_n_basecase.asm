@@ -13,11 +13,11 @@ include(`config.m4')dnl
 dnl
 .text
 
-.global	FUNC(flint_mpn_mulhigh_basecase)
+.global	FUNC(flint_mpn_mulhigh_n_basecase)
 .p2align	4, 0x90
-TYPE(flint_mpn_mulhigh_basecase)
+TYPE(flint_mpn_mulhigh_n_basecase)
 
-FUNC(flint_mpn_mulhigh_basecase):
+FUNC(flint_mpn_mulhigh_n_basecase):
 	.cfi_startproc
 	push	%rbx
 	push	%rbp
@@ -26,10 +26,10 @@ FUNC(flint_mpn_mulhigh_basecase):
 	push	%r14
 	push	%r15
 
-	mov	%rdx, %rcx
+	mov	%rdx, %r8
 	mov	0*8(%rdx), %rdx
-	lea	-7*8(%rsi,%r8,8), %rsi
-	lea	5*8(%rcx), %rcx
+	lea	-7*8(%rsi,%rcx,8), %rsi
+	lea	5*8(%r8), %r8
 	xor	%r10d, %r10d
 
 	mulx	5*8(%rsi), %r9, %rax
@@ -37,7 +37,7 @@ FUNC(flint_mpn_mulhigh_basecase):
 	adcx	%r9, %rax
 	adcx	%r10, %rbx
 
-	mov	-4*8(%rcx), %rdx
+	mov	-4*8(%r8), %rdx
 	mulx	4*8(%rsi), %r9, %r12
 	mulx	5*8(%rsi), %r9, %rbp
 	adcx	%r12, %rax
@@ -48,13 +48,13 @@ FUNC(flint_mpn_mulhigh_basecase):
 	adcx	%r10, %rbp
 	adox	%r10, %rbp
 
-	mov	-3*8(%rcx), %rdx
+	mov	-3*8(%r8), %rdx
 	mulx	3*8(%rsi), %r9, %r13
 	mulx	4*8(%rsi), %r9, %r12
 	adcx	%r13, %rax
 	adox	%r9, %rax
 	adcx	%r12, %rbx
-	mulx	4*8(%rsi), %r9, %r12
+	mulx	5*8(%rsi), %r9, %r12
 	adox	%r9, %rbx
 	adcx	%r12, %rbp
 	mulx	6*8(%rsi), %r9, %r12
@@ -62,16 +62,16 @@ FUNC(flint_mpn_mulhigh_basecase):
 	adcx	%r10, %r12
 	adox	%r10, %r12
 
-	mov	-2*8(%rcx), %rdx
+	mov	-2*8(%r8), %rdx
 	mulx	2*8(%rsi), %r9, %r14
 	mulx	3*8(%rsi), %r9, %r13
 	adcx	%r14, %rax
 	adox	%r9, %rax
 	adcx	%r13, %rbx
-	mulx	3*8(%rsi), %r9, %r13
+	mulx	4*8(%rsi), %r9, %r13
 	adox	%r9, %rbx
 	adcx	%r13, %rbp
-	mulx	4*8(%rsi), %r9, %r13
+	mulx	5*8(%rsi), %r9, %r13
 	adox	%r9, %rbp
 	adcx	%r13, %r12
 	mulx	6*8(%rsi), %r9, %r13
@@ -79,19 +79,19 @@ FUNC(flint_mpn_mulhigh_basecase):
 	adcx	%r10, %r13
 	adox	%r10, %r13
 
-	mov	-1*8(%rcx), %rdx
+	mov	-1*8(%r8), %rdx
 	mulx	1*8(%rsi), %r9, %r15
 	mulx	2*8(%rsi), %r9, %r14
 	adcx	%r15, %rax
 	adox	%r9, %rax
 	adcx	%r14, %rbx
-	mulx	2*8(%rsi), %r9, %r14
+	mulx	3*8(%rsi), %r9, %r14
 	adox	%r9, %rbx
 	adcx	%r14, %rbp
-	mulx	3*8(%rsi), %r9, %r14
+	mulx	4*8(%rsi), %r9, %r14
 	adox	%r9, %rbp
 	adcx	%r14, %r12
-	mulx	4*8(%rsi), %r9, %r14
+	mulx	5*8(%rsi), %r9, %r14
 	adox	%r9, %r12
 	adcx	%r14, %r13
 	mulx	6*8(%rsi), %r9, %r14
@@ -99,22 +99,22 @@ FUNC(flint_mpn_mulhigh_basecase):
 	adcx	%r10, %r14
 	adox	%r10, %r14
 
-	mov	0*8(%rcx), %rdx
+	mov	0*8(%r8), %rdx
 	mulx	0*8(%rsi), %r9, %r11
 	mulx	1*8(%rsi), %r9, %r15
 	adcx	%r11, %rax
 	adox	%r9, %rax
 	adcx	%r15, %rbx
-	mulx	1*8(%rsi), %r9, %r15
+	mulx	2*8(%rsi), %r9, %r15
 	adox	%r9, %rbx
 	adcx	%r15, %rbp
-	mulx	2*8(%rsi), %r9, %r15
+	mulx	3*8(%rsi), %r9, %r15
 	adox	%r9, %rbp
 	adcx	%r15, %r12
-	mulx	3*8(%rsi), %r9, %r15
+	mulx	4*8(%rsi), %r9, %r15
 	adox	%r9, %r12
 	adcx	%r15, %r13
-	mulx	4*8(%rsi), %r9, %r15
+	mulx	5*8(%rsi), %r9, %r15
 	adox	%r9, %r13
 	adcx	%r15, %r14
 	mulx	6*8(%rsi), %r9, %r15
@@ -122,33 +122,29 @@ FUNC(flint_mpn_mulhigh_basecase):
 	adcx	%r10, %r15
 	adox	%r10, %r15
 
-	lea	-6(%r8), %r8
-.Lloop:
-	lea	1*8(%rsi), %rsi
-	lea	1*8(%rcx), %rcx
+	mov	1*8(%r8), %rdx
 	mulx	0*8(%rsi), %r9, %r11
-	adcx	%r9, %rbx
-	adcx	%r11, %rbp
+	adcx	%r9, %rax
+	adcx	%r11, %rbx
 	mulx	1*8(%rsi), %r9, %r11
-	adox	%r9, %rbp
-	adox	%r11, %r12
+	adox	%r9, %rbx
+	adox	%r11, %rbp
 	mulx	2*8(%rsi), %r9, %r11
-	adcx	%r9, %r12
-	adcx	%r11, %r13
+	adcx	%r9, %rbp
+	adcx	%r11, %r12
 	mulx	3*8(%rsi), %r9, %r11
-	adox	%r9, %r13
-	adox	%r11, %r14
+	adox	%r9, %r12
+	adox	%r11, %r13
 	mulx	4*8(%rsi), %r9, %r11
-	adcx	%r9, %r14
-	adcx	%r11, %r15
+	adcx	%r9, %r13
+	adcx	%r11, %r14
 	mulx	5*8(%rsi), %r9, %r11
-	adox	%r9, %r15
+	adox	%r9, %r14
+	adox	%r11, %r15
+	mulx	6*8(%rsi), %r9, %r11
+	adcx	%r9, %r15
 	adcx	%r10, %r11
 	adox	%r10, %r11
-	dec	%r8
-	lea	6*8(%rdi), %rdi
-	test	%r8, %r8
-	jnz	.Lloop
 	mov	%rbx, 0*8(%rdi)
 	mov	%rbp, 1*8(%rdi)
 	mov	%r12, 2*8(%rdi)
@@ -164,6 +160,6 @@ FUNC(flint_mpn_mulhigh_basecase):
 	pop	%rbx
 
 	ret
-.flint_mpn_mulhigh_basecase_end:
-SIZE(flint_mpn_mulhigh_basecase, .flint_mpn_mulhigh_basecase_end)
+.flint_mpn_mulhigh_n_basecase_end:
+SIZE(flint_mpn_mulhigh_n_basecase, .flint_mpn_mulhigh_n_basecase_end)
 .cfi_endproc

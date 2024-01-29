@@ -404,8 +404,8 @@ function mulhigh_basecase(debug::Bool = false)
         res = _regs[1]
         ap = _regs[2]
         bp_old = _regs[3] # rdx
-        bp = _regs[4] # rdx is used by mulx, so we need to switch register for bp
-        n = _regs[5]
+        n = _regs[4]
+        bp = _regs[5] # rdx is used by mulx
 
         ap_save = "-1*8(%rsp)\n"
         bp_save = "-2*8(%rsp)\n"
@@ -454,7 +454,7 @@ function mulhigh_basecase(debug::Bool = false)
         body *= "\tadox\t$sc, $ret\n"
         body *= "\tadcx\t$(r(ix + 0)), $(r(0))\n"
         for jx in 2:ix
-            body *= "\tmulx\t$(k - 2 + jx - ix)*8($ap), $sc, $(r(ix))\n"
+            body *= "\tmulx\t$(k - 1 + jx - ix)*8($ap), $sc, $(r(ix))\n"
             body *= "\tadox\t$sc, $(r(jx - 2))\n"
             body *= "\tadcx\t$(r(ix)), $(r(jx - 1))\n"
         end
@@ -464,34 +464,45 @@ function mulhigh_basecase(debug::Bool = false)
         body *= "\tadox\t$zr, $(r(ix + 0))\n"
         body *= "\n"
     end
-    body *= "\tlea\t-$k($n), $n\n"
+    # body *= "\tlea\t-$k($n), $n\n"
 
-    # Crooked rectangle
-    body *= ".Lloop:\n"
-    body *= "\tlea\t1*8($ap), $ap\n"
-    body *= "\tlea\t1*8($bp), $bp\n"
-    for ix in 0:k - 2
+    # bp + ix - k + 1 <= bp + k - 1 - k + 1 = bp
+    # ap + k - 1 - ix >= ap + k - 1 - k + 1 = ap
+
+    # (bp + k - 1) + 1 = bp + k, k = 6, n = 7 OK
+    # (ap + n - k - 1) = ap + n - k = [k = 6, n = 7] = ap
+    # (ap + n - k - 1) + k = ap + n - 1
+
+    # # Crooked rectangle
+    # body *= ".Lloop:\n"
+    # body *= "\tlea\t-1*8($ap), $ap\n"
+    # body *= "\tlea\t1*8($bp), $bp\n"
+    body *= "\tmov\t1*8($bp), %rdx\n"
+    body *= "\tmulx\t0*8($ap), $sc, $(r(k))\n"
+    body *= "\tadcx\t$sc, $ret\n"
+    body *= "\tadcx\t$(r(k)), $(r(0))\n"
+    for ix in 1:k - 1
         body *= "\tmulx\t$ix*8($ap), $sc, $(r(k))\n"
         if ix % 2 == 0
-            body *= "\tadcx\t$sc, $(r(ix + 0))\n"
-            body *= "\tadcx\t$(r(k)), $(r(ix + 1))\n"
+            body *= "\tadcx\t$sc, $(r(ix - 1))\n"
+            body *= "\tadcx\t$(r(k)), $(r(ix))\n"
         else
-            body *= "\tadox\t$sc, $(r(ix + 0))\n"
-            body *= "\tadox\t$(r(k)), $(r(ix + 1))\n"
+            body *= "\tadox\t$sc, $(r(ix - 1))\n"
+            body *= "\tadox\t$(r(k)), $(r(ix))\n"
         end
     end
-    body *= "\tmulx\t$(k - 1)*8($ap), $sc, $(r(k))\n"
-    if (k - 1) % 2 == 0
+    body *= "\tmulx\t$k*8($ap), $sc, $(r(k))\n"
+    if k % 2 == 0
         body *= "\tadcx\t$sc, $(r(k - 1))\n"
     else
         body *= "\tadox\t$sc, $(r(k - 1))\n"
     end
     body *= "\tadcx\t$zr, $(r(k))\n"
     body *= "\tadox\t$zr, $(r(k))\n"
-    body *= "\tdec\t$n\n"
-    body *= "\tlea\t$k*8($res), $res\n"
-    body *= "\ttest\t$n, $n\n"
-    body *= "\tjnz\t.Lloop\n"
+    # body *= "\tdec\t$n\n"
+    # # body *= "\tlea\t$k*8($res), $res\n"
+    # # body *= "\ttest\t$n, $n\n" SHOULD NOT BE NEEDED
+    # body *= "\tjnz\t.Lloop\n"
     for ix in 0:k - 1
         body *= "\tmov\t$(r(ix)), $ix*8($res)\n"
     end
@@ -805,7 +816,7 @@ end
 ###############################################################################
 
 function gen_mulhigh_basecase(nofile::Bool = false)
-    (pre, post) = function_pre_post("flint_mpn_mulhigh_basecase")
+    (pre, post) = function_pre_post("flint_mpn_mulhigh_n_basecase")
     functionbody = mulhigh_basecase()
 
     str = "$copyright\n$preamble\n$pre$functionbody$post"
@@ -813,7 +824,7 @@ function gen_mulhigh_basecase(nofile::Bool = false)
     if nofile
         print(str)
     else
-        path = String(@__DIR__) * "/../src/mpn_extras/broadwell/mulhigh_basecase.asm"
+        path = String(@__DIR__) * "/../src/mpn_extras/broadwell/mulhigh_n_basecase.asm"
         file = open(path, "w")
         write(file, str)
         close(file)
