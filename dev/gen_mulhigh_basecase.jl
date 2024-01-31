@@ -376,6 +376,164 @@ function mulhigh(n::Int; debug::Bool = false)
     end
 end
 
+
+###############################################################################
+# Initial triangle
+###############################################################################
+# ap + ap_os ~= ap + n - 1
+# Triangle with side of size k - 1.
+# Assumes that bp[X] is already in rdx.
+# r0 should be rax.
+function macro_init_triangle(k::Int)
+    pre = ".macro\ttr_init_$(k) ap=$(_regs[2]), ap_os=0, bp=$(_regs[5]), bp_os=0, "
+    for ix in 0:k - 1
+        pre *= "r$ix, "
+    end
+    pre *= "sc, zr\n"
+    post = ".endm\n"
+
+    body = ""
+    body *= "\tmulx\t(\\ap_os - 1)*8(\\ap), \\r0, \\r0\n"
+    body *= "\tmulx\t(\\ap_os - 0)*8(\\ap), \\sc, \\r1\n"
+    body *= "\tadcx\t\\sc, \\r0\n"
+    body *= "\tadcx\t\\zr, \\r1\n"
+    body *= "\n"
+
+    for ix in 1:k - 2
+        body *= "\tmov\t$ix*8(\\bp), %rdx\n"
+        body *= "\tmulx\t(\\ap_os - $(ix + 1))*8(\\ap), \\sc, \\sc\n"
+        body *= "\tadcx\t\\sc, \\r0\n"
+        body *= "\tmulx\t(\\ap_os - $(ix + 0))*8(\\ap), \\sc, \\r$(ix + 1)\n"
+        body *= "\tadox\t\\sc, \\r0\n"
+        body *= "\tadcx\t\\r$(ix + 1), \\r1\n"
+        for jx in 2:ix
+            body *= "\tmulx\t(\\ap_os - $(ix - jx + 1))*8(\\ap), \\sc, \\r$(ix + 1)\n"
+            body *= "\tadox\t\\sc, \\r$(jx - 1)\n"
+            body *= "\tadcx\t\\r$(ix + 1), \\r$(jx - 0)\n"
+        end
+        body *= "\tmulx\t(\\ap_os - 0)*8(\\ap), \\sc, \\r$(ix + 1)\n"
+        body *= "\tadox\t\\sc, \\r$(ix + 0)\n"
+        body *= "\tadcx\t\\zr, \\r$(ix + 1)\n"
+        body *= "\tadox\t\\zr, \\r$(ix + 1)\n"
+        if ix != k - 2
+            body *= "\n"
+        end
+    end
+
+    return pre * body * post
+end
+
+###############################################################################
+# Initial parallelogram
+###############################################################################
+# Parallelogram with a projection of size mx + 1.
+# r0 should be rax.
+# Assumes cy is zero already
+function macro_init_parallelogram(k::Int, unroll::Int = 0)
+    pre = ".macro\tpg_init_$(k) ap=$(_regs[2]), ap_os=0, bp=$(_regs[5]), bp_os=0, mx=$(_regs[4]), "
+    for ix in 0:k
+        pre *= "r$ix, "
+    end
+    pre *= "cy, sl, sh, zr\n"
+    post = ".endm\n"
+
+    # Set initial rk
+    body *= "\tmov\t(\\bp_os + 0)*8(\\bp), %rdx\n"
+    body *= "\tmulx\t(\\ap_os + 0)*8(\\ap), \\sh, \\sh\n"
+    body *= "\tadox\t\\sh, \\r0\n"
+    body *= "\tmulx\t(\\ap_os + 1)*8(\\ap), \\sl, \\r$k\n"
+    body *= "\tadcx\t\\sl, \\r0\n"
+    body *= "\tadcx\t\\r$k, \\r1\n"
+    for ix in 1:k - 2
+        body *= "\tmulx\t(\\ap_os + $(ix + 1))*8(\\ap), \\sl, \\r$k\n"
+        if ix % 2 == 0
+            body *= "\tadcx\t\\sl, \\r$(ix + 0)\n"
+            body *= "\tadcx\t\\r$k, \\r$(ix + 1)\n"
+        else
+            body *= "\tadox\t\\sl, \\r$(ix + 0)\n"
+            body *= "\tadox\t\\r$k, \\r$(ix + 1)\n"
+        end
+    end
+    body *= "\tmulx\t(\\ap_os + $(k - 1))*8(\\ap), \\sl, \\r$k\n"
+    if k % 2 == 1
+        body *= "\tadcx\t\\sl, \\r$(k - 1)\n"
+    else
+        body *= "\tadox\t\\sl, \\r$(k - 1)\n"
+    end
+    body *= "\tadcx\t\\zr, \\r$k\n"
+    body *= "\tadox\t\\zr, \\r$k\n"
+    body *= "\n"
+
+    for ur in 1:unroll
+        body *= "\tmov\t(\\bp_os + $ur)*8(\\bp), %rdx\n"
+        body *= "\tmulx\t(\\ap_os + 0 - $ur)*8(\\ap), \\sh, \\sh\n"
+        body *= "\tadox\t\\sh, \\r0\n"
+        body *= "\tmulx\t(\\ap_os + 1 - $ur)*8(\\ap), \\sl, \\sh\n"
+        body *= "\tadcx\t\\sl, \\r0\n"
+        body *= "\tadcx\t\\sh, \\r1\n"
+        for ix in 1:k - 2
+            body *= "\tmulx\t(\\ap_os + $(ix + 1) - $ur)*8(\\ap), \\sl, \\sh\n"
+            if ix % 2 == 0
+                body *= "\tadcx\t\\sl, \\r$(ix + 0)\n"
+                body *= "\tadcx\t\\sh, \\r$(ix + 1)\n"
+            else
+                body *= "\tadox\t\\sl, \\r$(ix + 0)\n"
+                body *= "\tadox\t\\sh, \\r$(ix + 1)\n"
+            end
+        end
+        body *= "\tmulx\t(\\ap_os + $(k - 1) - $ur)*8(\\ap), \\sl, \\sh\n"
+        if k % 2 == 1
+            body *= "\tadox\t\\zr, \\r$k\n"
+            body *= "\tadcx\t\\sl, \\r$(k - 1)\n"
+            body *= "\tadcx\t\\sh, \\r$k\n"
+        else
+            body *= "\tadcx\t\\zr, \\r$k\n"
+            body *= "\tadox\t\\sl, \\r$(k - 1)\n"
+            body *= "\tadox\t\\sh, \\r$k\n"
+        end
+        body *= "\tadcx\t\\zr, \\cy\n"
+        body *= "\tadox\t\\zr, \\cy\n"
+        body *= "\n"
+    end
+
+    # FIXME: Unroll this one?
+    body *= ".Ltr_init:\n"
+    body *= "\tmov\t(\\bp_os + $(unroll + 1))*8(\\bp), %rdx\n"
+    body *= "\tmulx\t(\\ap_os + 0 - $(unroll + 1))*8(\\ap), \\sh, \\sh\n"
+    body *= "\tadox\t\\sh, \\r0\n"
+    body *= "\tmulx\t(\\ap_os + 1 - $(unroll + 1))*8(\\ap), \\sl, \\sh\n"
+    body *= "\tadcx\t\\sl, \\r0\n"
+    body *= "\tadcx\t\\sh, \\r1\n"
+    for ix in 1:k - 2
+        body *= "\tmulx\t(\\ap_os + $(ix + 1) - $(unroll + 1))*8(\\ap), \\sl, \\sh\n"
+        if ix % 2 == 0
+            body *= "\tadcx\t\\sl, \\r$(ix + 0)\n"
+            body *= "\tadcx\t\\sh, \\r$(ix + 1)\n"
+        else
+            body *= "\tadox\t\\sl, \\r$(ix + 0)\n"
+            body *= "\tadox\t\\sh, \\r$(ix + 1)\n"
+        end
+    end
+    body *= "\tmulx\t(\\ap_os + $(k - 1) - $(unroll + 1))*8(\\ap), \\sl, \\sh\n"
+    if k % 2 == 1
+        body *= "\tadox\t\\zr, \\r$k\n"
+        body *= "\tadcx\t\\sl, \\r$(k - 1)\n"
+        body *= "\tadcx\t\\sh, \\r$k\n"
+    else
+        body *= "\tadcx\t\\zr, \\r$k\n"
+        body *= "\tadox\t\\sl, \\r$(k - 1)\n"
+        body *= "\tadox\t\\sh, \\r$k\n"
+    end
+    body *= "\tadcx\t\\zr, \\cy\n"
+    body *= "\tadox\t\\zr, \\cy\n"
+    body *= "\n"
+
+    body *= "\tjnz\t.Ltr_init\n"
+    body *= "\n"
+
+    return pre * body * post
+end
+
 # Products we calculate, where h stands for upper result only:
 #          b_{0}   b_{1}  ...  b_{n-3} b_{n-2} b_{n-1}
 #  a_{0}                  ...             h       x
@@ -387,39 +545,34 @@ end
 # a_{n-2}    h       x    ...     x       x       x
 # a_{n-1}    x       x    ...     x       x       x
 #
-# Herein we assume that n > 7 or something. FIXME: Define limit.
-function mulhigh_basecase(debug::Bool = false)
-    k = 6
-
-    if debug
-        res = "res"
-        ap = "ap"
-        bp_old = "bp_old"
-        bp = "bp"
-        n = "n"
-
-        sc = "sc"
-        zr = "zr"
-    else
-        res = _regs[1]
-        ap = _regs[2]
-        bp_old = _regs[3] # rdx
-        n = _regs[4]
-        bp = _regs[5] # rdx is used by mulx
-
-        ap_save = "-1*8(%rsp)\n"
-        bp_save = "-2*8(%rsp)\n"
-        n_save = "-3*8(%rsp)\n"
-
-        sc = _regs[6] # scrap register
-        zr = _regs[7] # zero
-        cy = _regs[8] # carry for next chain
-        ret = _regs[9] # return value, i.e the lowest limb
-
-        _r = __regs[1:6]
+# Herein we assume that n > k + unroll.
+function mulhigh_basecase2(k::Int, unroll::Int = 0, debug::Bool = false)
+    if !(2 <= k <= 6)
+        error()
     end
 
-    r(ix::Int) = debug ? "r($ix)" : (0 <= ix < k) ? _r[ix + 1] : cy
+    # TODO: Check if we want to push res into stack? We only need it once after
+    # every triangle and parallelogram.
+    res = _regs[1]
+    ap = _regs[2]
+    bp_old = _regs[3] # rdx
+    n = _regs[4]
+    bp = _regs[5] # rdx is used by mulx
+
+    ap_save = "-1*8(%rsp)\n"
+    bp_save = "-2*8(%rsp)\n"
+    n_save = "-1*8(%rsp)\n"
+
+    w0, w1, w2, w3 = 0, 1, 2, 3
+    sl = _regs[6] # scrap register
+    sh = "error sh" # scrap register
+    zr = _regs[7] # zero
+    cy = _regs[8] # carry for next chain
+    ret = _regs[9] # return value, i.e the lowest limb
+
+    _r = __regs[1:6]
+    # r(ix::Int) = _r[ix + 1]
+    r = _r
 
     # Push
     body = ""
@@ -435,49 +588,60 @@ function mulhigh_basecase(debug::Bool = false)
 
     body *= "\tmov\t$bp_old, $bp\n"
     body *= "\tmov\t0*8($bp_old), %rdx\n"
+
     body *= "\tlea\t-$(k + 1)*8($ap,$n,8), $ap\n" # ap <- ap + n - k - 1
-    body *= "\tlea\t$(k - 1)*8($bp), $bp\n" # bp <- bp + k - 1
+    body *= "\tlea\t$(k + 0)*8($bp), $bp\n" # bp <- bp + k
+    body *= "\tlea\t-$(k + 1)($n), $n\n"
+
     body *= "\txor\t$(R32(zr)), $(R32(zr))\n"
     body *= "\n"
 
-    # Triangle
-    body *= "\tmulx\t$(k - 1)*8($ap), $sc, $ret\n"
-    body *= "\tmulx\t$(k - 0)*8($ap), $sc, $(r(0))\n"
-    body *= "\tadcx\t$sc, $ret\n"
-    body *= "\tadcx\t$zr, $(r(0))\n"
-    body *= "\n"
+    # Initial triangle
+    # FIXME: ap_os and bp_os
+    body *= "\ttr_init_$k\t$ap, $ap_os, $bp, $bp_os, $ret, "
     for ix in 1:k - 1
-        body *= "\tmov\t$(ix - k + 1)*8($bp), %rdx\n"
-        body *= "\tmulx\t$(k - 1 - ix)*8($ap), $sc, $(r(ix + 1))\n"
-        body *= "\tmulx\t$(k - 0 - ix)*8($ap), $sc, $(r(ix + 0))\n"
-        body *= "\tadcx\t$(r(ix + 1)), $ret\n"
-        body *= "\tadox\t$sc, $ret\n"
-        body *= "\tadcx\t$(r(ix + 0)), $(r(0))\n"
-        for jx in 2:ix
-            body *= "\tmulx\t$(k - 1 + jx - ix)*8($ap), $sc, $(r(ix))\n"
-            body *= "\tadox\t$sc, $(r(jx - 2))\n"
-            body *= "\tadcx\t$(r(ix)), $(r(jx - 1))\n"
-        end
-        body *= "\tmulx\t$(k - 0)*8($ap), $sc, $(r(ix + 0))\n"
-        body *= "\tadox\t$sc, $(r(ix - 1))\n"
-        body *= "\tadcx\t$zr, $(r(ix + 0))\n"
-        body *= "\tadox\t$zr, $(r(ix + 0))\n"
-        body *= "\n"
+        body *= "$(r[ix]), "
     end
-    # body *= "\tlea\t-$k($n), $n\n"
+    body *= "$sc, $zr"
 
-    # bp + ix - k + 1 <= bp + k - 1 - k + 1 = bp
-    # ap + k - 1 - ix >= ap + k - 1 - k + 1 = ap
+    # Crooked rectangle
+    # k + 1 multiplications
+    body *= "\txor\t$(R32(cy)), $(R32(cy))\n"
+    body *= ".L1:\n"
+    body *= "\tmov\t0*8($bp), %rdx\n"
+    body *= "\tmulx\t-1*8($ap), $sc, $(r(k))\n"
+    body *= "\tadox\t$(r(k)), $ret\n"
+    body *= "\tmulx\t0*8($ap), $sc, $(r(k))\n"
+    body *= "\tadcx\t$sc, $ret\n"
+    body *= "\tadcx\t$(r(k)), $(r(0))\n"
+    for ix in 1:k - 2
+        body *= "\tmulx\t$ix*8($ap), $sc, $(r(k))\n"
+        if ix % 2 == 0
+            body *= "\tadcx\t$sc, $(r(ix - 1))\n"
+            body *= "\tadcx\t$(r(k)), $(r(ix))\n"
+        else
+            body *= "\tadox\t$sc, $(r(ix - 1))\n"
+            body *= "\tadox\t$(r(k)), $(r(ix))\n"
+        end
+    end
+    body *= "\tmulx\t$(k - 1)*8($ap), $sc, $(r(k))\n"
+    if (k - 1) % 2 == 0
+        body *= "\tadcx\t$sc, $(r(k - 2))\n"
+        body *= "\tadcx\t$(r(k)), $(r(k - 1))\n"
+    else
+        body *= "\tadox\t$sc, $(r(k - 2))\n"
+        body *= "\tadox\t$(r(k)), $(r(k - 1))\n"
+    end
+    body *= "\tadcx\t$zr, $(r(k - 1))\n"
+    body *= "\tadox\t$zr, $(r(k - 1))\n"
+    body *= "\tadcx\t$zr, $(r(k))\n"
+    body *= "\tadox\t$zr, $(r(k))\n"
+    body *= "\tdec\t$n\n"
+    body *= "\tlea\t-1*8($ap), $ap\n"
+    body *= "\tlea\t1*8($bp), $bp\n"
+    body *= "\tjnz\t.L1\n"
 
-    # (bp + k - 1) + 1 = bp + k, k = 6, n = 7 OK
-    # (ap + n - k - 1) = ap + n - k = [k = 6, n = 7] = ap
-    # (ap + n - k - 1) + k = ap + n - 1
-
-    # # Crooked rectangle
-    # body *= ".Lloop:\n"
-    # body *= "\tlea\t-1*8($ap), $ap\n"
-    # body *= "\tlea\t1*8($bp), $bp\n"
-    body *= "\tmov\t1*8($bp), %rdx\n"
+    body *= "\tmov\t0*8($bp), %rdx\n"
     body *= "\tmulx\t0*8($ap), $sc, $(r(k))\n"
     body *= "\tadcx\t$sc, $ret\n"
     body *= "\tadcx\t$(r(k)), $(r(0))\n"
@@ -491,18 +655,19 @@ function mulhigh_basecase(debug::Bool = false)
             body *= "\tadox\t$(r(k)), $(r(ix))\n"
         end
     end
-    body *= "\tmulx\t$k*8($ap), $sc, $(r(k))\n"
-    if k % 2 == 0
-        body *= "\tadcx\t$sc, $(r(k - 1))\n"
-    else
-        body *= "\tadox\t$sc, $(r(k - 1))\n"
-    end
+    # body *= "\tmulx\t$(k - 1)*8($ap), $sc, $(r(k))\n"
+    # if (k - 1) % 2 == 0
+    #     body *= "\tadcx\t$sc, $(r(k - 2))\n"
+    #     body *= "\tadcx\t$(r(k)), $(r(k - 1))\n"
+    # else
+    #     body *= "\tadox\t$sc, $(r(k - 2))\n"
+    #     body *= "\tadox\t$(r(k)), $(r(k - 1))\n"
+    # end
+    # body *= "\tadcx\t$zr, $(r(k - 1))\n"
+    # body *= "\tadox\t$zr, $(r(k - 1))\n"
     body *= "\tadcx\t$zr, $(r(k))\n"
     body *= "\tadox\t$zr, $(r(k))\n"
-    # body *= "\tdec\t$n\n"
-    # # body *= "\tlea\t$k*8($res), $res\n"
-    # # body *= "\ttest\t$n, $n\n" SHOULD NOT BE NEEDED
-    # body *= "\tjnz\t.Lloop\n"
+
     for ix in 0:k - 1
         body *= "\tmov\t$(r(ix)), $ix*8($res)\n"
     end
@@ -515,13 +680,140 @@ function mulhigh_basecase(debug::Bool = false)
     body *= "\n"
 
     body *= "\tret\n"
-    if debug
-        print(body)
-    else
-        return body
-    end
+    return body
 end
 
+# IDEA: Compute initial triangle, so that 
+function mulhigh_basecase()
+    res = _regs[1]
+    ap = _regs[2]
+    bp_old = _regs[3] # rdx
+    n = _regs[4]
+    bp = _regs[5] # rdx is used by mulx
+
+    ap_save = "-1*8(%rsp)\n"
+    bp_save = "-2*8(%rsp)\n"
+    n_save = "-1*8(%rsp)\n"
+
+    w0, w1, w2, w3 = 0, 1, 2, 3
+    sl = _regs[6] # scrap register
+    sh = "error sh" # scrap register
+    zr = _regs[7] # zero
+    cy = _regs[8] # carry for next chain
+    ret = _regs[9] # return value, i.e the lowest limb
+
+    _r = __regs[1:6]
+    # r(ix::Int) = _r[ix + 1]
+    r = _r
+
+    # Push
+    body = ""
+    for reg in __regs
+        body *= "\tpush\t$reg\n"
+    end
+    body *= "\n"
+
+    # Prepare
+    # body *= "\tmov\t$ap, $ap_save\n"
+    # body *= "\tmov\t$bp_old, $bp_save\n"
+    # body *= "\tmov\t$n, $n_save\n"
+
+    body *= "\tmov\t$bp_old, $bp\n"
+    body *= "\tmov\t0*8($bp_old), %rdx\n"
+
+    body *= "\tlea\t-$(k + 1)*8($ap,$n,8), $ap\n" # ap <- ap + n - k - 1
+    body *= "\tlea\t$(k + 0)*8($bp), $bp\n" # bp <- bp + k
+    body *= "\tlea\t-$(k + 1)($n), $n\n"
+
+    body *= "\txor\t$(R32(zr)), $(R32(zr))\n"
+    body *= "\n"
+
+    # Initial triangle
+    # FIXME: ap_os and bp_os
+    body *= "\ttr_init_$k\t$ap, $ap_os, $bp, $bp_os, $ret, "
+    for ix in 1:k - 1
+        body *= "$(r[ix]), "
+    end
+    body *= "$sc, $zr"
+
+    # Crooked rectangle
+    # k + 1 multiplications
+    body *= "\txor\t$(R32(cy)), $(R32(cy))\n"
+    body *= ".L1:\n"
+    body *= "\tmov\t0*8($bp), %rdx\n"
+    body *= "\tmulx\t-1*8($ap), $sc, $(r(k))\n"
+    body *= "\tadox\t$(r(k)), $ret\n"
+    body *= "\tmulx\t0*8($ap), $sc, $(r(k))\n"
+    body *= "\tadcx\t$sc, $ret\n"
+    body *= "\tadcx\t$(r(k)), $(r(0))\n"
+    for ix in 1:k - 2
+        body *= "\tmulx\t$ix*8($ap), $sc, $(r(k))\n"
+        if ix % 2 == 0
+            body *= "\tadcx\t$sc, $(r(ix - 1))\n"
+            body *= "\tadcx\t$(r(k)), $(r(ix))\n"
+        else
+            body *= "\tadox\t$sc, $(r(ix - 1))\n"
+            body *= "\tadox\t$(r(k)), $(r(ix))\n"
+        end
+    end
+    body *= "\tmulx\t$(k - 1)*8($ap), $sc, $(r(k))\n"
+    if (k - 1) % 2 == 0
+        body *= "\tadcx\t$sc, $(r(k - 2))\n"
+        body *= "\tadcx\t$(r(k)), $(r(k - 1))\n"
+    else
+        body *= "\tadox\t$sc, $(r(k - 2))\n"
+        body *= "\tadox\t$(r(k)), $(r(k - 1))\n"
+    end
+    body *= "\tadcx\t$zr, $(r(k - 1))\n"
+    body *= "\tadox\t$zr, $(r(k - 1))\n"
+    body *= "\tadcx\t$zr, $(r(k))\n"
+    body *= "\tadox\t$zr, $(r(k))\n"
+    body *= "\tdec\t$n\n"
+    body *= "\tlea\t-1*8($ap), $ap\n"
+    body *= "\tlea\t1*8($bp), $bp\n"
+    body *= "\tjnz\t.L1\n"
+
+    body *= "\tmov\t0*8($bp), %rdx\n"
+    body *= "\tmulx\t0*8($ap), $sc, $(r(k))\n"
+    body *= "\tadcx\t$sc, $ret\n"
+    body *= "\tadcx\t$(r(k)), $(r(0))\n"
+    for ix in 1:k - 1
+        body *= "\tmulx\t$ix*8($ap), $sc, $(r(k))\n"
+        if ix % 2 == 0
+            body *= "\tadcx\t$sc, $(r(ix - 1))\n"
+            body *= "\tadcx\t$(r(k)), $(r(ix))\n"
+        else
+            body *= "\tadox\t$sc, $(r(ix - 1))\n"
+            body *= "\tadox\t$(r(k)), $(r(ix))\n"
+        end
+    end
+    # body *= "\tmulx\t$(k - 1)*8($ap), $sc, $(r(k))\n"
+    # if (k - 1) % 2 == 0
+    #     body *= "\tadcx\t$sc, $(r(k - 2))\n"
+    #     body *= "\tadcx\t$(r(k)), $(r(k - 1))\n"
+    # else
+    #     body *= "\tadox\t$sc, $(r(k - 2))\n"
+    #     body *= "\tadox\t$(r(k)), $(r(k - 1))\n"
+    # end
+    # body *= "\tadcx\t$zr, $(r(k - 1))\n"
+    # body *= "\tadox\t$zr, $(r(k - 1))\n"
+    body *= "\tadcx\t$zr, $(r(k))\n"
+    body *= "\tadox\t$zr, $(r(k))\n"
+
+    for ix in 0:k - 1
+        body *= "\tmov\t$(r(ix)), $ix*8($res)\n"
+    end
+    body *= "\n"
+
+    # Pop
+    for reg in reverse(__regs)
+        body *= "\tpop\t$reg\n"
+    end
+    body *= "\n"
+
+    body *= "\tret\n"
+    return body
+end
 ###############################################################################
 # mulhigh, normalised
 ###############################################################################
