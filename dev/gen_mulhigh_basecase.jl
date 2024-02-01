@@ -107,7 +107,7 @@ preamble = "include(`config.m4')dnl\ndnl\n.text\n"
 
 function function_pre_post(funname::String)
     pre = ".global\tFUNC($funname)
-.p2align\t4, 0x90
+.p2align\t5, 0x90
 TYPE($funname)
 
 FUNC($funname):
@@ -533,12 +533,12 @@ function mulhigh_basecase()
     body *= "\n"
 
     ###########################################################################
-    # Long addmul chain
+    # Addmul chains
     ###########################################################################
     # Set m, m_save, and declare r as dead
     m, m_save, r = _regs[4], _regs[1], "dead r"
-    body *= "\tmov\t\$$(k), $(R32(m))\n"
-    body *= "\tmov\t\$$(k), $(R32(m_save))\n"
+    body *= "\tmov\t\$$(k + 1), $(R32(m))\n"
+    body *= "\tmov\t\$$(k + 1), $(R32(m_save))\n"
 
     # Set ap_save, rp_save
     ap_save, rp_save = __regs[1], _regs[8]
@@ -548,122 +548,197 @@ function mulhigh_basecase()
     # Declare four scrap registers
     s0, s1, s2, s3 = __regs[2:5]
 
-    # Set bit-shift register
-    shr3 = __regs[6]
-    body *= "\tmov\t\$3, $(R32(shr3))\n"
+    # Move bp into rdx
+    body *= "\tmov\t0*8($bp), %rdx\n"
 
-    # Do the first two multiplications that should be added onto ret
-    body *= "\tmov\t($bp), %rdx\n"
+    # Set mm8 to m
+    mm8 = __regs[6]
+    body *= "\tmov\t$(R32(m)), $(R32(mm8))\n"
+
+    # Set m to m / 8
+    body *= "\tshr\t\$3, $m\n"
+
+    # Set mm8 to m % 8, reset flags
+    body *= "\tand\t\$7, $(R32(mm8))\n"
+
+    # Set jmpptr to pointer of .Ljmptab
+    jmpptr, s3 = s3, "dead s3"
+    body *= "\tlea\t.Ljmptab(%rip), $jmpptr\n"
+
+    # Jump to label according to jmpptr + mm8
+    body *= "ifdef(`PIC',
+`\tmovslq\t($jmpptr,$mm8,4), $mm8
+\tlea\t($mm8,$jmpptr), $jmpptr
+\tjmp\t*$jmpptr
+',`
+\tjmp\t*($jmpptr,$mm8,8)
+')\n"
+
+    # Jump table to enter addmul8 loop in a compact way
+    body *= "\t.section\t.data.rel.ro.local,\"a\",@progbits
+\t.p2align\t3, 0x90
+ifdef(`PIC',
+`.Ljmptab:
+\t.long\t.Lpream0-.Ltab
+\t.long\t.Lpream1-.Ltab
+\t.long\t.Lpream2-.Ltab
+\t.long\t.Lpream3-.Ltab
+\t.long\t.Lpream4-.Ltab
+\t.long\t.Lpream5-.Ltab
+\t.long\t.Lpream6-.Ltab
+\t.long\t.Lpream7-.Ltab',
+`.Ljmptab:
+\t.quad\t.Lpream0
+\t.quad\t.Lpream1
+\t.quad\t.Lpream2
+\t.quad\t.Lpream3
+\t.quad\t.Lpream4
+\t.quad\t.Lpream5
+\t.quad\t.Lpream6
+\t.quad\t.Lpream7')
+\t.text\n"
+
+    # Precompute first elements to enter addmul loop
+    body *= ".Lpream0:"
     body *= "\tmulx\t-2*8($ap), $s1, $s1\n"
     body *= "\tmulx\t-1*8($ap), $s2, $s3\n"
     body *= "\tadcx\t$s1, $ret\n"
     body *= "\tadox\t$s2, $ret\n"
+    body *= ".Lpream0_final:"
     body *= "\tmulx\t0*8($ap), $s0, $s1\n"
     body *= "\tadcx\t$s3, $s0\n"
-
-    # TODO: Check where to jump into the loop via m
-
-    # Prepare m to loop (divide by 8)
-    body *= ".Lamenter:\n"
-    body *= "\tshrx\t$(R32(shr3)), $(R32(m)), $(R32(m))\n"
-
-    # Do the chain
-    body *= ".Lam1:\n"
-    body *= "\tmulx\t1*8($ap), $s2, $s3\n"
-    body *= "\tadox\t$(0 - k)*8($rp), $s0\n"
-    body *= "\tadcx\t$s1, $s2\n"
-    body *= "\tmov\t$s0, $(0 - k)*8($rp)\n"
-
-    body *= ".Lam2:\n"
-    body *= "\tmulx\t2*8($ap), $s0, $s1\n"
-    body *= "\tadox\t$(1 - k)*8($rp), $s2\n"
-    body *= "\tadcx\t$s3, $s0\n"
-    body *= "\tmov\t$s2, $(1 - k)*8($rp)\n"
-
-    body *= ".Lam3:\n"
-    body *= "\tmulx\t3*8($ap), $s2, $s3\n"
-    body *= "\tadox\t$(2 - k)*8($rp), $s0\n"
-    body *= "\tadcx\t$s1, $s2\n"
-    body *= "\tmov\t$s0, $(2 - k)*8($rp)\n"
-
-    body *= ".Lam4:\n"
-    body *= "\tmulx\t4*8($ap), $s0, $s1\n"
-    body *= "\tadox\t$(3 - k)*8($rp), $s2\n"
-    body *= "\tadcx\t$s3, $s0\n"
-    body *= "\tmov\t$s2, $(3 - k)*8($rp)\n"
-
-    body *= ".Lam5:\n"
-    body *= "\tmulx\t5*8($ap), $s2, $s3\n"
-    body *= "\tadox\t$(4 - k)*8($rp), $s0\n"
-    body *= "\tadcx\t$s1, $s2\n"
-    body *= "\tmov\t$s0, $(4 - k)*8($rp)\n"
-
-    body *= ".Lam6:\n"
-    body *= "\tmulx\t6*8($ap), $s0, $s1\n"
-    body *= "\tadox\t$(5 - k)*8($rp), $s2\n"
-    body *= "\tadcx\t$s3, $s0\n"
-    body *= "\tmov\t$s2, $(5 - k)*8($rp)\n"
-
-    body *= ".Lam7:\n"
-    body *= "\tmulx\t7*8($ap), $s2, $s3\n"
-    body *= "\tadox\t$(6 - k)*8($rp), $s0\n"
-    body *= "\tadcx\t$s1, $s2\n"
-    body *= "\tmov\t$s0, $(6 - k)*8($rp)\n"
-
-    body *= ".Lam8:\n"
-    body *= "\tmulx\t8*8($ap), $s0, $s1\n"
-    body *= "\tadox\t$(7 - k)*8($rp), $s2\n"
-    body *= "\tadcx\t$s3, $s0\n"
-    body *= "\tmov\t$s2, $(7 - k)*8($rp)\n"
-
-    # Decrease m
+    body *= "\tlea\t-1*8($ap), $ap\n"
+    body *= "\tlea\t-1*8($ap), $rp\n"
     body *= "\tlea\t-1($m), $m\n"
+    body *= "\tjmp\t.Lam0\n"
 
-    # Increase ap and rp
-    body *= "\tlea\t8*8($ap), $ap\n"
-    body *= "\tlea\t8*8($rp), $rp\n"
-
-    # If m == 0, exit loop. Else, continue with loop.
-    body *= "\tjrcxz\t.Lamfin\n"
+    body *= ".Lpream1:"
+    body *= "\tmulx\t-2*8($ap), $s3, $s3\n"
+    body *= "\tmulx\t-1*8($ap), $s0, $s1\n"
+    body *= "\tadcx\t$s3, $ret\n"
+    body *= "\tadox\t$s0, $ret\n"
+    body *= ".Lpream1_final:"
+    body *= "\tmulx\t0*8($ap), $s2, $s3\n"
+    body *= "\tadcx\t$s1, $s2\n"
     body *= "\tjmp\t.Lam1\n"
 
-    # Push new high limb into rp
-    body *= ".Lamfin:\n"
-    body *= "\tadox\t$(8 - k)*8($rp), $s0\n"
-    body *= "\tmov\t$s0, $(8 - k)*8($rp)\n"
-    body *= "\tadcx\t$m, $s1\n" # Relies on m = 0
-    body *= "\tadox\t$m, $s1\n"
-    body *= "\tmov\t$s1, $(9 - k)*8($rp)\n"
+    # For pream2, see down below.
 
-    # Increase m_save and set as new m
-    body *= "\tlea\t1($m_save), $m\n"
-    body *= "\tlea\t1($m_save), $m_save\n"
+    body *= ".Lpream3:"
+    body *= "\tmulx\t-2*8($ap), $s3, $s3\n"
+    body *= "\tmulx\t-1*8($ap), $s0, $s1\n"
+    body *= "\tadcx\t$s3, $ret\n"
+    body *= "\tadox\t$s0, $ret\n"
+    body *= ".Lpream3_final:"
+    body *= "\tmulx\t0*8($ap), $s2, $s3\n"
+    body *= "\tadcx\t$s1, $s2\n"
+    body *= "\tlea\t2*8($ap), $ap\n"
+    body *= "\tlea\t-6*8($rp), $rp\n"
+    body *= "\tjmp\t.Lam3\n"
 
-    # Reset rp
-    body *= "\tmov\t$rp_save, $rp\n"
-
-    # Decrease ap_save, and set as new ap
-    body *= "\tlea\t-1*8($ap_save), $ap\n"
-    body *= "\tlea\t-1*8($ap_save), $ap_save\n"
-
-    # Increase bp
-    body *= "\tlea\t1*8($bp), $bp\n"
-
-    # If m == n, exit
-    body *= "\tcmp\t$m, $n\n"
-    body *= "\tje\t.Lexit\n"
-    body *= "\ttest\t%al, %al\n" # Reset flags
-
-    ###########################################################################
-    # Final addmul chain
-    ###########################################################################
-
-    # FIXME: Do the first multiplication that should be added onto ret
+    body *= ".Lpream4:"
+    body *= "\tmulx\t-2*8($ap), $s1, $s1\n"
     body *= "\tmulx\t-1*8($ap), $s2, $s3\n"
     body *= "\tadcx\t$s1, $ret\n"
     body *= "\tadox\t$s2, $ret\n"
+    body *= ".Lpream4_final:"
     body *= "\tmulx\t0*8($ap), $s0, $s1\n"
     body *= "\tadcx\t$s3, $s0\n"
+    body *= "\tlea\t3*8($ap), $ap\n"
+    body *= "\tlea\t-5*8($rp), $rp\n"
+    body *= "\tjmp\t.Lam4\n"
+
+    body *= ".Lpream5:"
+    body *= "\tmulx\t0*8($ap), $s2, $s3\n"
+    body *= "\tlea\t4*8($ap), $ap\n"
+    body *= "\tlea\t-4*8($rp), $rp\n"
+    body *= "\tjmp\t.Lam5\n"
+
+    body *= ".Lpream6:"
+    body *= "\tmulx\t0*8($ap), $s0, $s1\n"
+    body *= "\tlea\t5*8($ap), $ap\n"
+    body *= "\tlea\t-3*8($rp), $rp\n"
+    body *= "\tjmp\t.Lam6\n"
+
+    body *= ".Lpream7:"
+    body *= "\tmulx\t0*8($ap), $s2, $s3\n"
+    body *= "\tlea\t-2*8($ap), $ap\n"
+    body *= "\tlea\t-2*8($rp), $rp\n"
+    body *= "\tjmp\t.Lam7\n"
+
+    body *= ".Lpream2:"
+    body *= "\tmulx\t0*8($ap), $s0, $s1\n"
+    body *= "\tlea\t1*8($ap), $ap\n"
+    body *= "\tlea\t1*8($rp), $rp\n"
+    body *= "\tmulx\t0*8($ap), $s2, $s3\n"
+    # body *= "\tjmp\t.Lam2\n"
+
+    body *= "\t.p2align\t5, 0x90\n"
+    body *= ".Lam2:\n"
+    body *= "\tadox\t-1*8($rp), $s0\n"
+    body *= "\tadcx\t$s1, $s2\n"
+    body *= "\tmov\t$s0, -1*8($rp)\n"
+    if m != "%rcx"
+        error()
+    else
+        body *= "\tjrcxz\t.Lpostam\n"
+    end
+
+    body *= ".Lam1:\n"
+    body *= "\tmulx\t1*8($ap), $s0, $s1\n"
+    body *= "\tadox\t0*8($rp), $s2\n"
+    body *= "\tlea\t-1($m), $m\n"
+    body *= "\tmov\t$s2, 0*8($rp)\n"
+    body *= "\tadcx\t$s3, $s0\n"
+
+    body *= ".Lam0:\n"
+    body *= "\tmulx\t2*8($ap), $s2, $s3\n"
+    body *= "\tadcx\t$s1, $s2\n"
+    body *= "\tadox\t1*8($rp), $s0\n"
+    body *= "\tmov\t$s0, 1*8($rp)\n"
+
+    body *= ".Lam7:\n"
+    body *= "\tmulx\t3*8($ap), $s0, $s1\n"
+    body *= "\tlea\t8*8($ap), $ap\n"
+    body *= "\tadcx\t$s3, $s0\n"
+    body *= "\tadox\t2*8($rp), $s2\n"
+    body *= "\tmov\t$s2, 2*8($rp)\n"
+
+    body *= ".Lam6:\n"
+    body *= "\tmulx\t-4*8($ap), $s2, $s3\n"
+    body *= "\tadox\t3*8($rp), $s0\n"
+    body *= "\tadcx\t$s1, $s2\n"
+    body *= "\tmov\t$s0, 3*8($rp)\n"
+
+    body *= ".Lam5:\n"
+    body *= "\tmulx\t-3*8($ap), $s0, $s1\n"
+    body *= "\tadcx\t$s3, $s0\n"
+    body *= "\tadox\t4*8($rp), $s2\n"
+    body *= "\tmov\t$s2, 4*8($rp)\n"
+
+    body *= ".Lam4:\n"
+    body *= "\tmulx\t-2*8($ap), $s2, $s3\n"
+    body *= "\tadox\t5*8($rp), $s0\n"
+    body *= "\tadcx\t$s1, $s2\n"
+    body *= "\tmov\t$s0, 5*8($rp)\n"
+
+    body *= ".Lam3:\n"
+    body *= "\tadox\t6*8($rp), $s2\n"
+    body *= "\tmulx\t-1*8($ap), $s0, $s1\n"
+    body *= "\tmov\t$s2, 6*8($rp)\n"
+    body *= "\tlea\t8*8($rp), $rp\n"
+    body *= "\tadcx\t$s3, $s0\n"
+    body *= "\tmulx\t0*8($ap), $s2, $s3\n"
+    body *= "\tjmp\t.Lamtop\n"
+
+    # Post addmul-loop
+    body *= ".Lpostam:\n"
+    body *= "\tadox\t0*8($rp), $s2\n"
+    body *= "\tmov\t$s2, 0*8($rp)\n"
+    body *= "\tadox\t$m, $s3\n"
+    body *= "\tadc\t$m, $s3\n"
+    body *= "\tmov\t$s3, 1*8($rp)\n"
+    body *= "\tret\n"
 
     ###########################################################################
     # Pop
