@@ -376,17 +376,17 @@ function mulhigh(n::Int; debug::Bool = false)
     end
 end
 
-
 ###############################################################################
 # Initial triangle
 ###############################################################################
 # ap + ap_os ~= ap + n - 1
-# Triangle with side of size k - 1.
+# bp + bp_os ~= bp
+# Triangle with side of size k + 1.
 # Assumes that bp[X] is already in rdx.
 # r0 should be rax.
-function macro_init_triangle(k::Int)
-    pre = ".macro\ttr_init_$(k) ap=$(_regs[2]), ap_os=0, bp=$(_regs[5]), bp_os=0, "
-    for ix in 0:k - 1
+function macro_triangle(k::Int)
+    pre = ".macro\ttr_$(k) ap=$(_regs[2]), ap_os=0, bp=$(_regs[5]), bp_os=0"
+    for ix in 0:k + 1
         pre *= "r$ix, "
     end
     pre *= "sc, zr\n"
@@ -399,8 +399,8 @@ function macro_init_triangle(k::Int)
     body *= "\tadcx\t\\zr, \\r1\n"
     body *= "\n"
 
-    for ix in 1:k - 2
-        body *= "\tmov\t$ix*8(\\bp), %rdx\n"
+    for ix in 1:k
+        body *= "\tmov\t(\\bp_os + $ix)*8(\\bp), %rdx\n"
         body *= "\tmulx\t(\\ap_os - $(ix + 1))*8(\\ap), \\sc, \\sc\n"
         body *= "\tadcx\t\\sc, \\r0\n"
         body *= "\tmulx\t(\\ap_os - $(ix + 0))*8(\\ap), \\sc, \\r$(ix + 1)\n"
@@ -415,7 +415,7 @@ function macro_init_triangle(k::Int)
         body *= "\tadox\t\\sc, \\r$(ix + 0)\n"
         body *= "\tadcx\t\\zr, \\r$(ix + 1)\n"
         body *= "\tadox\t\\zr, \\r$(ix + 1)\n"
-        if ix != k - 2
+        if ix != k
             body *= "\n"
         end
     end
@@ -423,397 +423,264 @@ function macro_init_triangle(k::Int)
     return pre * body * post
 end
 
-###############################################################################
-# Initial parallelogram
-###############################################################################
-# Parallelogram with a projection of size mx + 1.
-# r0 should be rax.
-# Assumes cy is zero already
-function macro_init_parallelogram(k::Int, unroll::Int = 0)
-    pre = ".macro\tpg_init_$(k) ap=$(_regs[2]), ap_os=0, bp=$(_regs[5]), bp_os=0, mx=$(_regs[4]), "
-    for ix in 0:k
-        pre *= "r$ix, "
-    end
-    pre *= "cy, sl, sh, zr\n"
-    post = ".endm\n"
-
-    # Set initial rk
-    body *= "\tmov\t(\\bp_os + 0)*8(\\bp), %rdx\n"
-    body *= "\tmulx\t(\\ap_os + 0)*8(\\ap), \\sh, \\sh\n"
-    body *= "\tadox\t\\sh, \\r0\n"
-    body *= "\tmulx\t(\\ap_os + 1)*8(\\ap), \\sl, \\r$k\n"
-    body *= "\tadcx\t\\sl, \\r0\n"
-    body *= "\tadcx\t\\r$k, \\r1\n"
-    for ix in 1:k - 2
-        body *= "\tmulx\t(\\ap_os + $(ix + 1))*8(\\ap), \\sl, \\r$k\n"
-        if ix % 2 == 0
-            body *= "\tadcx\t\\sl, \\r$(ix + 0)\n"
-            body *= "\tadcx\t\\r$k, \\r$(ix + 1)\n"
-        else
-            body *= "\tadox\t\\sl, \\r$(ix + 0)\n"
-            body *= "\tadox\t\\r$k, \\r$(ix + 1)\n"
-        end
-    end
-    body *= "\tmulx\t(\\ap_os + $(k - 1))*8(\\ap), \\sl, \\r$k\n"
-    if k % 2 == 1
-        body *= "\tadcx\t\\sl, \\r$(k - 1)\n"
-    else
-        body *= "\tadox\t\\sl, \\r$(k - 1)\n"
-    end
-    body *= "\tadcx\t\\zr, \\r$k\n"
-    body *= "\tadox\t\\zr, \\r$k\n"
-    body *= "\n"
-
-    for ur in 1:unroll
-        body *= "\tmov\t(\\bp_os + $ur)*8(\\bp), %rdx\n"
-        body *= "\tmulx\t(\\ap_os + 0 - $ur)*8(\\ap), \\sh, \\sh\n"
-        body *= "\tadox\t\\sh, \\r0\n"
-        body *= "\tmulx\t(\\ap_os + 1 - $ur)*8(\\ap), \\sl, \\sh\n"
-        body *= "\tadcx\t\\sl, \\r0\n"
-        body *= "\tadcx\t\\sh, \\r1\n"
-        for ix in 1:k - 2
-            body *= "\tmulx\t(\\ap_os + $(ix + 1) - $ur)*8(\\ap), \\sl, \\sh\n"
-            if ix % 2 == 0
-                body *= "\tadcx\t\\sl, \\r$(ix + 0)\n"
-                body *= "\tadcx\t\\sh, \\r$(ix + 1)\n"
-            else
-                body *= "\tadox\t\\sl, \\r$(ix + 0)\n"
-                body *= "\tadox\t\\sh, \\r$(ix + 1)\n"
-            end
-        end
-        body *= "\tmulx\t(\\ap_os + $(k - 1) - $ur)*8(\\ap), \\sl, \\sh\n"
-        if k % 2 == 1
-            body *= "\tadox\t\\zr, \\r$k\n"
-            body *= "\tadcx\t\\sl, \\r$(k - 1)\n"
-            body *= "\tadcx\t\\sh, \\r$k\n"
-        else
-            body *= "\tadcx\t\\zr, \\r$k\n"
-            body *= "\tadox\t\\sl, \\r$(k - 1)\n"
-            body *= "\tadox\t\\sh, \\r$k\n"
-        end
-        body *= "\tadcx\t\\zr, \\cy\n"
-        body *= "\tadox\t\\zr, \\cy\n"
-        body *= "\n"
-    end
-
-    # FIXME: Unroll this one?
-    body *= ".Ltr_init:\n"
-    body *= "\tmov\t(\\bp_os + $(unroll + 1))*8(\\bp), %rdx\n"
-    body *= "\tmulx\t(\\ap_os + 0 - $(unroll + 1))*8(\\ap), \\sh, \\sh\n"
-    body *= "\tadox\t\\sh, \\r0\n"
-    body *= "\tmulx\t(\\ap_os + 1 - $(unroll + 1))*8(\\ap), \\sl, \\sh\n"
-    body *= "\tadcx\t\\sl, \\r0\n"
-    body *= "\tadcx\t\\sh, \\r1\n"
-    for ix in 1:k - 2
-        body *= "\tmulx\t(\\ap_os + $(ix + 1) - $(unroll + 1))*8(\\ap), \\sl, \\sh\n"
-        if ix % 2 == 0
-            body *= "\tadcx\t\\sl, \\r$(ix + 0)\n"
-            body *= "\tadcx\t\\sh, \\r$(ix + 1)\n"
-        else
-            body *= "\tadox\t\\sl, \\r$(ix + 0)\n"
-            body *= "\tadox\t\\sh, \\r$(ix + 1)\n"
-        end
-    end
-    body *= "\tmulx\t(\\ap_os + $(k - 1) - $(unroll + 1))*8(\\ap), \\sl, \\sh\n"
-    if k % 2 == 1
-        body *= "\tadox\t\\zr, \\r$k\n"
-        body *= "\tadcx\t\\sl, \\r$(k - 1)\n"
-        body *= "\tadcx\t\\sh, \\r$k\n"
-    else
-        body *= "\tadcx\t\\zr, \\r$k\n"
-        body *= "\tadox\t\\sl, \\r$(k - 1)\n"
-        body *= "\tadox\t\\sh, \\r$k\n"
-    end
-    body *= "\tadcx\t\\zr, \\cy\n"
-    body *= "\tadox\t\\zr, \\cy\n"
-    body *= "\n"
-
-    body *= "\tjnz\t.Ltr_init\n"
-    body *= "\n"
-
-    return pre * body * post
-end
-
-# Products we calculate, where h stands for upper result only:
-#          b_{0}   b_{1}  ...  b_{n-3} b_{n-2} b_{n-1}
-#  a_{0}                  ...             h       x
-#  a_{1}                  ...     h       x       x
-#  a_{2}                  ...     x       x       x
-#  ...
-#  ...
-# a_{n-3}            h    ...     x       x       x
-# a_{n-2}    h       x    ...     x       x       x
-# a_{n-1}    x       x    ...     x       x       x
+# Scheme for n = 11:
 #
-# Herein we assume that n > k + unroll.
-function mulhigh_basecase2(k::Int, unroll::Int = 0, debug::Bool = false)
-    if !(2 <= k <= 6)
+# a/b 0  1  2  3  4  5  6  7  8  9 10
+#   +--------------------------------
+#  0|                            h  x
+#  1|                         h  x  x
+#  2|                      h  x  ø  x <- (ap, bp) will initially point to ø
+#  3|                   h  x  x  x  x
+#  4|                h  x  x  x  x  x
+#  5|             h  x  x  x  x  x  x
+#  6|          h  x  x  x  x  x  x  x
+#  7|       h  x  x  x  x  x  x  x  x
+#  8|    h  x  x  x  x  x  x  x  x  x
+#  9| h  x  x  x  x  x  x  x  x  x  x
+# 10| x  x  x  x  x  x  x  x  x  x  x
+function mulhigh_basecase()
+    k = 8
+
+    # Needed registers with an initial triangle of size k:
+    # - rp
+    # - ap
+    # - bp
+    # - rdx for mulx
+    # - rax for ret
+    #
+    # - For initial triangle:
+    #   * k registers
+    #   * sc
+    #   * zr
+    #
+    # - For memory addmul-chains:
+    #   * 4 registers
+    #   * m
+    #   * m_save
+    #   * n
+    #   * ap_save
+    #   * rp_save
+    #
+    # Hence, we need at least 5 + max(k + 2, 8) registers.
+    # Assuming we have k = 9, we need 16 registers.
+    rp = _regs[1]
+    ap = _regs[2]
+    bp_old = _regs[3] # rdx
+    n = _regs[4] # rcx
+    bp = _regs[5] # rdx is used by mulx
+    ret = _regs[9] # rax for storing the lowest limb
+
+    body = "\tmov\t$bp_old, $bp\n"
+    body *= "\tlea\t-$(k + 1)*8($ap,$n,8), $ap\n" # ap += n - k - 1
+    body *= "\tlea\t$(k + 1)*8($bp), $bp\n" # bp += k + 1
+    body *= "\tlea\t$(k)*8($rp), $rp\n" # rp += k
+    body *= "\tlea\t-1($n), $n\n" # n -= 1
+
+    ###########################################################################
+    # Push
+    ###########################################################################
+    for reg in __regs
+        body *= "\tpush\t$reg\n"
+    end
+    body *= "\n"
+
+    ###########################################################################
+    # Do initial triangle
+    ###########################################################################
+    # Push rp and n to use as storage registers
+    body *= "\tpush\t$n\n"
+    body *= "\tpush\t$rp\n"
+    r = [_regs[8]; __regs[1]; rp; n; __regs[2:6]] # 9 registers
+    rp, n = "dead rp", "dead n"
+    sc = _regs[6] # scrap register
+    zr = _regs[7] # zero
+
+    if length(r) != k + 1
         error()
     end
 
-    # TODO: Check if we want to push res into stack? We only need it once after
-    # every triangle and parallelogram.
-    res = _regs[1]
-    ap = _regs[2]
-    bp_old = _regs[3] # rdx
-    n = _regs[4]
-    bp = _regs[5] # rdx is used by mulx
+    # Temporarily declare as dead
+    rp = "dead rp"
+    n = "dead n"
 
-    ap_save = "-1*8(%rsp)\n"
-    bp_save = "-2*8(%rsp)\n"
-    n_save = "-1*8(%rsp)\n"
+    # Load bp
+    body *= "\tmov\t0*8($bp), %rdx\n"
 
-    w0, w1, w2, w3 = 0, 1, 2, 3
-    sl = _regs[6] # scrap register
-    sh = "error sh" # scrap register
-    zr = _regs[7] # zero
-    cy = _regs[8] # carry for next chain
-    ret = _regs[9] # return value, i.e the lowest limb
-
-    _r = __regs[1:6]
-    # r(ix::Int) = _r[ix + 1]
-    r = _r
-
-    # Push
-    body = ""
-    for reg in __regs
-        body *= "\tpush\t$reg\n"
-    end
-    body *= "\n"
-
-    # Prepare
-    # body *= "\tmov\t$ap, $ap_save\n"
-    # body *= "\tmov\t$bp_old, $bp_save\n"
-    # body *= "\tmov\t$n, $n_save\n"
-
-    body *= "\tmov\t$bp_old, $bp\n"
-    body *= "\tmov\t0*8($bp_old), %rdx\n"
-
-    body *= "\tlea\t-$(k + 1)*8($ap,$n,8), $ap\n" # ap <- ap + n - k - 1
-    body *= "\tlea\t$(k + 0)*8($bp), $bp\n" # bp <- bp + k
-    body *= "\tlea\t-$(k + 1)($n), $n\n"
-
+    # Zero zr-register
     body *= "\txor\t$(R32(zr)), $(R32(zr))\n"
-    body *= "\n"
 
-    # Initial triangle
-    # FIXME: ap_os and bp_os
-    body *= "\ttr_init_$k\t$ap, $ap_os, $bp, $bp_os, $ret, "
-    for ix in 1:k - 1
+    # Do triangle
+    ap_os = k
+    bp_os = -(k + 1)
+    body *= "\ttr_$(k)\t$ap, $ap_os, $bp, $bp_os, $ret, "
+    for ix in 1:k + 1
         body *= "$(r[ix]), "
     end
-    body *= "$sc, $zr"
+    body *= "$sc, $zr\n"
 
-    # Crooked rectangle
-    # k + 1 multiplications
-    body *= "\txor\t$(R32(cy)), $(R32(cy))\n"
-    body *= ".L1:\n"
-    body *= "\tmov\t0*8($bp), %rdx\n"
-    body *= "\tmulx\t-1*8($ap), $sc, $(r(k))\n"
-    body *= "\tadox\t$(r(k)), $ret\n"
-    body *= "\tmulx\t0*8($ap), $sc, $(r(k))\n"
-    body *= "\tadcx\t$sc, $ret\n"
-    body *= "\tadcx\t$(r(k)), $(r(0))\n"
-    for ix in 1:k - 2
-        body *= "\tmulx\t$ix*8($ap), $sc, $(r(k))\n"
-        if ix % 2 == 0
-            body *= "\tadcx\t$sc, $(r(ix - 1))\n"
-            body *= "\tadcx\t$(r(k)), $(r(ix))\n"
-        else
-            body *= "\tadox\t$sc, $(r(ix - 1))\n"
-            body *= "\tadox\t$(r(k)), $(r(ix))\n"
-        end
-    end
-    body *= "\tmulx\t$(k - 1)*8($ap), $sc, $(r(k))\n"
-    if (k - 1) % 2 == 0
-        body *= "\tadcx\t$sc, $(r(k - 2))\n"
-        body *= "\tadcx\t$(r(k)), $(r(k - 1))\n"
-    else
-        body *= "\tadox\t$sc, $(r(k - 2))\n"
-        body *= "\tadox\t$(r(k)), $(r(k - 1))\n"
-    end
-    body *= "\tadcx\t$zr, $(r(k - 1))\n"
-    body *= "\tadox\t$zr, $(r(k - 1))\n"
-    body *= "\tadcx\t$zr, $(r(k))\n"
-    body *= "\tadox\t$zr, $(r(k))\n"
-    body *= "\tdec\t$n\n"
-    body *= "\tlea\t-1*8($ap), $ap\n"
-    body *= "\tlea\t1*8($bp), $bp\n"
-    body *= "\tjnz\t.L1\n"
+    # Restore rp and declare sc as dead
+    rp, sc = sc, "dead sc"
+    body *= "\tpop\t$rp\n"
 
-    body *= "\tmov\t0*8($bp), %rdx\n"
-    body *= "\tmulx\t0*8($ap), $sc, $(r(k))\n"
-    body *= "\tadcx\t$sc, $ret\n"
-    body *= "\tadcx\t$(r(k)), $(r(0))\n"
-    for ix in 1:k - 1
-        body *= "\tmulx\t$ix*8($ap), $sc, $(r(k))\n"
-        if ix % 2 == 0
-            body *= "\tadcx\t$sc, $(r(ix - 1))\n"
-            body *= "\tadcx\t$(r(k)), $(r(ix))\n"
-        else
-            body *= "\tadox\t$sc, $(r(ix - 1))\n"
-            body *= "\tadox\t$(r(k)), $(r(ix))\n"
-        end
-    end
-    # body *= "\tmulx\t$(k - 1)*8($ap), $sc, $(r(k))\n"
-    # if (k - 1) % 2 == 0
-    #     body *= "\tadcx\t$sc, $(r(k - 2))\n"
-    #     body *= "\tadcx\t$(r(k)), $(r(k - 1))\n"
-    # else
-    #     body *= "\tadox\t$sc, $(r(k - 2))\n"
-    #     body *= "\tadox\t$(r(k)), $(r(k - 1))\n"
-    # end
-    # body *= "\tadcx\t$zr, $(r(k - 1))\n"
-    # body *= "\tadox\t$zr, $(r(k - 1))\n"
-    body *= "\tadcx\t$zr, $(r(k))\n"
-    body *= "\tadox\t$zr, $(r(k))\n"
+    # Set n and declare zr as dead
+    n, zr = zr, "dead zr"
+    body *= "\tpop\t$n\n"
 
-    for ix in 0:k - 1
-        body *= "\tmov\t$(r(ix)), $ix*8($res)\n"
+    # Push into rp
+    for ix in 1:k + 1
+        body *= "\tmov\t$(r[ix]), $(ix - 1 - k)*8($rp)\n"
     end
     body *= "\n"
 
+    ###########################################################################
+    # Long addmul chain
+    ###########################################################################
+    # Set m, m_save, and declare r as dead
+    m, m_save, r = _regs[4], _regs[1], "dead r"
+    body *= "\tmov\t\$$(k), $(R32(m))\n"
+    body *= "\tmov\t\$$(k), $(R32(m_save))\n"
+
+    # Set ap_save, rp_save
+    ap_save, rp_save = __regs[1], _regs[8]
+    body *= "\tmov\t$ap, $ap_save\n"
+    body *= "\tmov\t$rp, $rp_save\n"
+
+    # Declare four scrap registers
+    s0, s1, s2, s3 = __regs[2:5]
+
+    # Set bit-shift register
+    shr3 = __regs[6]
+    body *= "\tmov\t\$3, $(R32(shr3))\n"
+
+    # Do the first two multiplications that should be added onto ret
+    body *= "\tmov\t($bp), %rdx\n"
+    body *= "\tmulx\t-2*8($ap), $s1, $s1\n"
+    body *= "\tmulx\t-1*8($ap), $s2, $s3\n"
+    body *= "\tadcx\t$s1, $ret\n"
+    body *= "\tadox\t$s2, $ret\n"
+    body *= "\tmulx\t0*8($ap), $s0, $s1\n"
+    body *= "\tadcx\t$s3, $s0\n"
+
+    # TODO: Check where to jump into the loop via m
+
+    # Prepare m to loop (divide by 8)
+    body *= ".Lamenter:\n"
+    body *= "\tshrx\t$(R32(shr3)), $(R32(m)), $(R32(m))\n"
+
+    # Do the chain
+    body *= ".Lam1:\n"
+    body *= "\tmulx\t1*8($ap), $s2, $s3\n"
+    body *= "\tadox\t$(0 - k)*8($rp), $s0\n"
+    body *= "\tadcx\t$s1, $s2\n"
+    body *= "\tmov\t$s0, $(0 - k)*8($rp)\n"
+
+    body *= ".Lam2:\n"
+    body *= "\tmulx\t2*8($ap), $s0, $s1\n"
+    body *= "\tadox\t$(1 - k)*8($rp), $s2\n"
+    body *= "\tadcx\t$s3, $s0\n"
+    body *= "\tmov\t$s2, $(1 - k)*8($rp)\n"
+
+    body *= ".Lam3:\n"
+    body *= "\tmulx\t3*8($ap), $s2, $s3\n"
+    body *= "\tadox\t$(2 - k)*8($rp), $s0\n"
+    body *= "\tadcx\t$s1, $s2\n"
+    body *= "\tmov\t$s0, $(2 - k)*8($rp)\n"
+
+    body *= ".Lam4:\n"
+    body *= "\tmulx\t4*8($ap), $s0, $s1\n"
+    body *= "\tadox\t$(3 - k)*8($rp), $s2\n"
+    body *= "\tadcx\t$s3, $s0\n"
+    body *= "\tmov\t$s2, $(3 - k)*8($rp)\n"
+
+    body *= ".Lam5:\n"
+    body *= "\tmulx\t5*8($ap), $s2, $s3\n"
+    body *= "\tadox\t$(4 - k)*8($rp), $s0\n"
+    body *= "\tadcx\t$s1, $s2\n"
+    body *= "\tmov\t$s0, $(4 - k)*8($rp)\n"
+
+    body *= ".Lam6:\n"
+    body *= "\tmulx\t6*8($ap), $s0, $s1\n"
+    body *= "\tadox\t$(5 - k)*8($rp), $s2\n"
+    body *= "\tadcx\t$s3, $s0\n"
+    body *= "\tmov\t$s2, $(5 - k)*8($rp)\n"
+
+    body *= ".Lam7:\n"
+    body *= "\tmulx\t7*8($ap), $s2, $s3\n"
+    body *= "\tadox\t$(6 - k)*8($rp), $s0\n"
+    body *= "\tadcx\t$s1, $s2\n"
+    body *= "\tmov\t$s0, $(6 - k)*8($rp)\n"
+
+    body *= ".Lam8:\n"
+    body *= "\tmulx\t8*8($ap), $s0, $s1\n"
+    body *= "\tadox\t$(7 - k)*8($rp), $s2\n"
+    body *= "\tadcx\t$s3, $s0\n"
+    body *= "\tmov\t$s2, $(7 - k)*8($rp)\n"
+
+    # Decrease m
+    body *= "\tlea\t-1($m), $m\n"
+
+    # Increase ap and rp
+    body *= "\tlea\t8*8($ap), $ap\n"
+    body *= "\tlea\t8*8($rp), $rp\n"
+
+    # If m == 0, exit loop. Else, continue with loop.
+    body *= "\tjrcxz\t.Lamfin\n"
+    body *= "\tjmp\t.Lam1\n"
+
+    # Push new high limb into rp
+    body *= ".Lamfin:\n"
+    body *= "\tadox\t$(8 - k)*8($rp), $s0\n"
+    body *= "\tmov\t$s0, $(8 - k)*8($rp)\n"
+    body *= "\tadcx\t$m, $s1\n" # Relies on m = 0
+    body *= "\tadox\t$m, $s1\n"
+    body *= "\tmov\t$s1, $(9 - k)*8($rp)\n"
+
+    # Increase m_save and set as new m
+    body *= "\tlea\t1($m_save), $m\n"
+    body *= "\tlea\t1($m_save), $m_save\n"
+
+    # Reset rp
+    body *= "\tmov\t$rp_save, $rp\n"
+
+    # Decrease ap_save, and set as new ap
+    body *= "\tlea\t-1*8($ap_save), $ap\n"
+    body *= "\tlea\t-1*8($ap_save), $ap_save\n"
+
+    # Increase bp
+    body *= "\tlea\t1*8($bp), $bp\n"
+
+    # If m == n, exit
+    body *= "\tcmp\t$m, $n\n"
+    body *= "\tje\t.Lexit\n"
+    body *= "\ttest\t%al, %al\n" # Reset flags
+
+    ###########################################################################
+    # Final addmul chain
+    ###########################################################################
+
+    # FIXME: Do the first multiplication that should be added onto ret
+    body *= "\tmulx\t-1*8($ap), $s2, $s3\n"
+    body *= "\tadcx\t$s1, $ret\n"
+    body *= "\tadox\t$s2, $ret\n"
+    body *= "\tmulx\t0*8($ap), $s0, $s1\n"
+    body *= "\tadcx\t$s3, $s0\n"
+
+    ###########################################################################
     # Pop
+    ###########################################################################
+    body *= ".Lexit:\n"
     for reg in reverse(__regs)
         body *= "\tpop\t$reg\n"
     end
     body *= "\n"
 
+    ###########################################################################
+    # Return
+    ###########################################################################
     body *= "\tret\n"
     return body
 end
 
-# IDEA: Compute initial triangle, so that 
-function mulhigh_basecase()
-    res = _regs[1]
-    ap = _regs[2]
-    bp_old = _regs[3] # rdx
-    n = _regs[4]
-    bp = _regs[5] # rdx is used by mulx
-
-    ap_save = "-1*8(%rsp)\n"
-    bp_save = "-2*8(%rsp)\n"
-    n_save = "-1*8(%rsp)\n"
-
-    w0, w1, w2, w3 = 0, 1, 2, 3
-    sl = _regs[6] # scrap register
-    sh = "error sh" # scrap register
-    zr = _regs[7] # zero
-    cy = _regs[8] # carry for next chain
-    ret = _regs[9] # return value, i.e the lowest limb
-
-    _r = __regs[1:6]
-    # r(ix::Int) = _r[ix + 1]
-    r = _r
-
-    # Push
-    body = ""
-    for reg in __regs
-        body *= "\tpush\t$reg\n"
-    end
-    body *= "\n"
-
-    # Prepare
-    # body *= "\tmov\t$ap, $ap_save\n"
-    # body *= "\tmov\t$bp_old, $bp_save\n"
-    # body *= "\tmov\t$n, $n_save\n"
-
-    body *= "\tmov\t$bp_old, $bp\n"
-    body *= "\tmov\t0*8($bp_old), %rdx\n"
-
-    body *= "\tlea\t-$(k + 1)*8($ap,$n,8), $ap\n" # ap <- ap + n - k - 1
-    body *= "\tlea\t$(k + 0)*8($bp), $bp\n" # bp <- bp + k
-    body *= "\tlea\t-$(k + 1)($n), $n\n"
-
-    body *= "\txor\t$(R32(zr)), $(R32(zr))\n"
-    body *= "\n"
-
-    # Initial triangle
-    # FIXME: ap_os and bp_os
-    body *= "\ttr_init_$k\t$ap, $ap_os, $bp, $bp_os, $ret, "
-    for ix in 1:k - 1
-        body *= "$(r[ix]), "
-    end
-    body *= "$sc, $zr"
-
-    # Crooked rectangle
-    # k + 1 multiplications
-    body *= "\txor\t$(R32(cy)), $(R32(cy))\n"
-    body *= ".L1:\n"
-    body *= "\tmov\t0*8($bp), %rdx\n"
-    body *= "\tmulx\t-1*8($ap), $sc, $(r(k))\n"
-    body *= "\tadox\t$(r(k)), $ret\n"
-    body *= "\tmulx\t0*8($ap), $sc, $(r(k))\n"
-    body *= "\tadcx\t$sc, $ret\n"
-    body *= "\tadcx\t$(r(k)), $(r(0))\n"
-    for ix in 1:k - 2
-        body *= "\tmulx\t$ix*8($ap), $sc, $(r(k))\n"
-        if ix % 2 == 0
-            body *= "\tadcx\t$sc, $(r(ix - 1))\n"
-            body *= "\tadcx\t$(r(k)), $(r(ix))\n"
-        else
-            body *= "\tadox\t$sc, $(r(ix - 1))\n"
-            body *= "\tadox\t$(r(k)), $(r(ix))\n"
-        end
-    end
-    body *= "\tmulx\t$(k - 1)*8($ap), $sc, $(r(k))\n"
-    if (k - 1) % 2 == 0
-        body *= "\tadcx\t$sc, $(r(k - 2))\n"
-        body *= "\tadcx\t$(r(k)), $(r(k - 1))\n"
-    else
-        body *= "\tadox\t$sc, $(r(k - 2))\n"
-        body *= "\tadox\t$(r(k)), $(r(k - 1))\n"
-    end
-    body *= "\tadcx\t$zr, $(r(k - 1))\n"
-    body *= "\tadox\t$zr, $(r(k - 1))\n"
-    body *= "\tadcx\t$zr, $(r(k))\n"
-    body *= "\tadox\t$zr, $(r(k))\n"
-    body *= "\tdec\t$n\n"
-    body *= "\tlea\t-1*8($ap), $ap\n"
-    body *= "\tlea\t1*8($bp), $bp\n"
-    body *= "\tjnz\t.L1\n"
-
-    body *= "\tmov\t0*8($bp), %rdx\n"
-    body *= "\tmulx\t0*8($ap), $sc, $(r(k))\n"
-    body *= "\tadcx\t$sc, $ret\n"
-    body *= "\tadcx\t$(r(k)), $(r(0))\n"
-    for ix in 1:k - 1
-        body *= "\tmulx\t$ix*8($ap), $sc, $(r(k))\n"
-        if ix % 2 == 0
-            body *= "\tadcx\t$sc, $(r(ix - 1))\n"
-            body *= "\tadcx\t$(r(k)), $(r(ix))\n"
-        else
-            body *= "\tadox\t$sc, $(r(ix - 1))\n"
-            body *= "\tadox\t$(r(k)), $(r(ix))\n"
-        end
-    end
-    # body *= "\tmulx\t$(k - 1)*8($ap), $sc, $(r(k))\n"
-    # if (k - 1) % 2 == 0
-    #     body *= "\tadcx\t$sc, $(r(k - 2))\n"
-    #     body *= "\tadcx\t$(r(k)), $(r(k - 1))\n"
-    # else
-    #     body *= "\tadox\t$sc, $(r(k - 2))\n"
-    #     body *= "\tadox\t$(r(k)), $(r(k - 1))\n"
-    # end
-    # body *= "\tadcx\t$zr, $(r(k - 1))\n"
-    # body *= "\tadox\t$zr, $(r(k - 1))\n"
-    body *= "\tadcx\t$zr, $(r(k))\n"
-    body *= "\tadox\t$zr, $(r(k))\n"
-
-    for ix in 0:k - 1
-        body *= "\tmov\t$(r(ix)), $ix*8($res)\n"
-    end
-    body *= "\n"
-
-    # Pop
-    for reg in reverse(__regs)
-        body *= "\tpop\t$reg\n"
-    end
-    body *= "\n"
-
-    body *= "\tret\n"
-    return body
-end
 ###############################################################################
 # mulhigh, normalised
 ###############################################################################
