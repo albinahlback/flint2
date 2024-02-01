@@ -14,11 +14,10 @@
 
 #if FLINT_HAVE_MPN_MULHIGH_N_BASECASE
 
-#define N_MIN 7
-/* #define N_MAX 12 */
-#define N_MAX 7
+#define K 3
 
-#define K 6
+#define N_MIN (K + 2)
+#define N_MAX 12
 
 TEST_FUNCTION_START(flint_mpn_mulhigh_n_basecase, state)
 {
@@ -38,9 +37,6 @@ TEST_FUNCTION_START(flint_mpn_mulhigh_n_basecase, state)
         mpn_random2(xp, n);
         mpn_random2(yp, n);
 
-        if (ix < 2)
-            continue;
-
         rp1[0] = flint_mpn_mulhigh_n(rp1 + 1, xp, yp, n);
         rp2[0] = flint_mpn_mulhigh_n_basecase(rp2 + 1, xp, yp, n);
 
@@ -54,7 +50,7 @@ TEST_FUNCTION_START(flint_mpn_mulhigh_n_basecase, state)
                     "yp = %{ulong*}\n"
                     "Expected: %{ulong*}\n"
                     "Got:      %{ulong*}\n",
-                    ix, n, xp, n, yp, n, rp1, n + 1, rp2, n + 1);
+                    ix, n, xp, n, yp, n, rp1, K + 1, rp2, K + 1);
 
         result = (mpn_cmp(rp1, rp2, K + 1) == 0);
         if (!result)
