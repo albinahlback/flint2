@@ -456,28 +456,27 @@ end
 # Assumes that bp[0] is already in rdx.
 # r0 should be rax.
 function macro_triangle(k::Int)
-    pre = ".macro\ttr_$(k) ap=$(_regs[2]), ap_os=0, bp=$(_regs[5]), bp_os=0"
+    pre = ".macro\ttr_$(k) ap=$(_regs[2]), ap_os=0, bp=$(_regs[5]), bp_os=0, "
     for ix in 0:k
         pre *= "r$ix, "
     end
-    pre *= "sc, zr\n"
+    pre *= "sc, zr, zr32\n"
     post = ".endm\n"
 
     body = ""
+    body *= "\tmov\t(\\bp_os + 0)*8(\\bp), %rdx\n"
     body *= "\tmulx\t(\\ap_os - 1)*8(\\ap), \\r0, \\r0\n"
     body *= "\tmulx\t(\\ap_os - 0)*8(\\ap), \\sc, \\r1\n"
-    body *= "\tadcx\t\\sc, \\r0\n"
-    body *= "\tadcx\t\\zr, \\r1\n"
+    body *= "\tadd\t\\sc, \\r0\n"
+    body *= "\tadc\t\$0, \\r1\n"
+    body *= "\txor\t\\zr32, \\zr32\n"
     body *= "\n"
 
     for ix in 1:k - 1
         body *= "\tmov\t(\\bp_os + $ix)*8(\\bp), %rdx\n"
         body *= "\tmulx\t(\\ap_os - $(ix + 1))*8(\\ap), \\sc, \\sc\n"
         body *= "\tadcx\t\\sc, \\r0\n"
-        body *= "\tmulx\t(\\ap_os - $(ix + 0))*8(\\ap), \\sc, \\r$(ix + 1)\n"
-        body *= "\tadox\t\\sc, \\r0\n"
-        body *= "\tadcx\t\\r$(ix + 1), \\r1\n"
-        for jx in 2:ix
+        for jx in 1:ix
             body *= "\tmulx\t(\\ap_os - $(ix - jx + 1))*8(\\ap), \\sc, \\r$(ix + 1)\n"
             body *= "\tadox\t\\sc, \\r$(jx - 1)\n"
             body *= "\tadcx\t\\r$(ix + 1), \\r$(jx - 0)\n"
@@ -503,15 +502,38 @@ end
 #  2|                      h  x  x  x
 #  3|                   h  x  x  x  x
 #  4|                h  x  x  x  x  x
-#  5|             h  x  x  x  x  x  x
+#  5|          ^  h  x  x  x  x  x  x
 #  6|          h  x  x  x  x  x  x  x
 #  7|       h  x  ø  x  x  x  x  x  x <- (ap, bp) will initially point to ø
 #  8|    h  x  x  x  x  x  x  x  x  x
 #  9| h  x  x  x  x  x  x  x  x  x  x
 # 10| x  x  x  x  x  x  x  x  x  x  x
 #
+# Scheme for n = 6:
+#
+# a/b 0  1  2  3  4  5
+#   +-----------------
+#  0|          ^  h  x
+#  1|          h  x  x
+#  2|       h  x  ø  x <- (ap, bp) will initially point to ø
+#  3|    h  x  x  x  x
+#  4| h  x  x  x  x  x
+#  5| x  x  x  x  x  x
+#
+# Scheme for n = 5:
+#
+# a/b 0  1  2  3  4
+#   +--------------
+#  0|          h  x
+#  1|       h  x  ø <- (ap, bp) will initially point to ø
+#  2|    h  x  x  x
+#  3| h  x  x  x  x
+#  4| x  x  x  x  x
+#
 # NOTE: The addmul chains in this file uses code from GMP's addmul_1 for
 # Broadwell.
+#
+# NOTE: Assumes that n > k + 1.
 function mulhigh_basecase(k::Int)
     # Needed registers with an initial triangle of size k:
     # - rp
@@ -545,7 +567,6 @@ function mulhigh_basecase(k::Int)
 
     body = "\tmov\t$bp_old, $bp\n"
     body *= "\tlea\t-$(k)*8($ap,$n_old,8), $ap\n" # ap += n - k
-    body *= "\tlea\t-1($n_old), $n_old\n" # n -= 1 FIXME
     body *= "\tlea\t$(k)*8($bp), $bp\n" # bp += k
 
     ###########################################################################
@@ -557,17 +578,11 @@ function mulhigh_basecase(k::Int)
     body *= "\n"
 
     ###########################################################################
-    # Do initial triangle
+    # Do initial triangle FIXME Seems to work!
     ###########################################################################
     r = [_regs[8]; __regs[1:3]]
     sc = _regs[6] # scrap register
     zr = _regs[7] # zero
-
-    # Load bp
-    body *= "\tmov\t0*8($bp), %rdx\n"
-
-    # Zero zr-register
-    body *= "\txor\t$(R32(zr)), $(R32(zr))\n"
 
     # Do triangle
     ap_os = k - 1
@@ -576,7 +591,7 @@ function mulhigh_basecase(k::Int)
     for ix in 1:k
         body *= "$(r[ix]), "
     end
-    body *= "$sc, $zr\n"
+    body *= "$sc, $zr, $(R32(zr))\n"
 
     # Push into rp
     for ix in 1:k
@@ -592,12 +607,13 @@ function mulhigh_basecase(k::Int)
     ###########################################################################
     # Set n
     n = _regs[6]
-    body *= "\tmov\t$n_old, $n\n"
+    body *= "\tlea\t-1($n_old), $n\n"
 
     # Set m and m_save
     m, m_save = _regs[4], _regs[7]
     body *= "\tmov\t\$$(k), $(R32(m_save))\n"
     body *= "\tmov\t\$$(k), $(R32(m))\n"
+    body *= "\tjmp\t.Ltmp\n" # FIXME Remove
 
     # Declare four scrap registers
     s0, s1, s2, s3 = __regs[1], __regs[2], __regs[3], _regs[8]
@@ -606,27 +622,28 @@ function mulhigh_basecase(k::Int)
     body *= "\t.align\t32, 0x90\n"
     body *= ".Lloop:"
     body *= "\tmov\t0*8($bp), %rdx\n"
-    body *= "\ttest\t%al, %al\n" # Reset flags from any comparison while looping
 
-    # Compute stuff contributing to ret
+    # Start computing stuff contributing to ret
     body *= "\tmulx\t-2*8($ap), $s1, $s1\n"
+
+    # Set s0 to m % 8 and set m to m / 8
     body *= ".Lfin:"
+    body *= "\tmov\t$(R32(m)), $(R32(s0))\n"
+    body *= "\tshr\t\$3, $m\n"
+    body *= "\tand\t\$7, $(R32(s0))\n" # Resets flags from shr
+
+    # Continue computing stuff contributing to ret
     body *= "\tmulx\t-1*8($ap), $s2, $s3\n"
     body *= "\tadcx\t$s1, $ret\n"
     body *= "\tadox\t$s2, $ret\n"
     body *= "\tmov\t$s3, $s1\n" # Either s1 or s3 is used before entering loop
-
-    # Set s0 to m % 8 and set m to m / 8
-    body *= "\tmov\t$(R32(m)), $(R32(s0))\n"
-    body *= "\tshr\t\$3, $m\n"
-    body *= "\tand\t\$7, $(R32(s0))\n" # Resets flags from shr
 
     # Set s2 to pointer of .Ljmptab
     body *= "\tlea\t.Ljmptab(%rip), $s2\n"
 
     # Jump to label accordingly
     body *= "ifdef(`PIC',
-`\tmovsxd\t($s2,$s0,4), $s0
+`\tmovslq\t($s2,$s0,4), $s0
 \tlea\t($s0,$s2), $s2
 \tjmp\t*$s2
 ',`
@@ -637,14 +654,14 @@ function mulhigh_basecase(k::Int)
 \t.align\t8, 0x90
 ifdef(`PIC',
 `.Ljmptab:
-\t.long\t.Lp0-.Ltab
-\t.long\t.Lp1-.Ltab
-\t.long\t.Lp2-.Ltab
-\t.long\t.Lp3-.Ltab
-\t.long\t.Lp4-.Ltab
-\t.long\t.Lp5-.Ltab
-\t.long\t.Lp6-.Ltab
-\t.long\t.Lp7-.Ltab',
+\t.long\t.Lp0-.Ljmptab
+\t.long\t.Lp1-.Ljmptab
+\t.long\t.Lp2-.Ljmptab
+\t.long\t.Lp3-.Ljmptab
+\t.long\t.Lp4-.Ljmptab
+\t.long\t.Lp5-.Ljmptab
+\t.long\t.Lp6-.Ljmptab
+\t.long\t.Lp7-.Ljmptab',
 `.Ljmptab:
 \t.quad\t.Lp0
 \t.quad\t.Lp1
@@ -669,7 +686,12 @@ ifdef(`PIC',
     body *= "\tmulx\t0*8($ap), $s2, $s3\n"
     body *= "\tadcx\t$s1, $s2\n"
     body *= "\tjmp\t.Lam1\n"
-    # For .Lp2, see down below.
+    body *= ".Lp2:"
+    body *= "\tmulx\t0*8($ap), $s0, $s1\n"
+    body *= "\tadcx\t$s3, $s0\n"
+    body *= "\tlea\t1*8($ap), $ap\n"
+    body *= "\tlea\t1*8($rp), $rp\n"
+    body *= "\tjmp\t.Lam2\n"
     body *= ".Lp3:"
     body *= "\tmulx\t0*8($ap), $s2, $s3\n"
     body *= "\tadcx\t$s1, $s2\n"
@@ -682,12 +704,7 @@ ifdef(`PIC',
     body *= "\tlea\t3*8($ap), $ap\n"
     body *= "\tlea\t-5*8($rp), $rp\n"
     body *= "\tjmp\t.Lam4\n"
-    body *= ".Lp5:"
-    body *= "\tmulx\t0*8($ap), $s2, $s3\n"
-    body *= "\tadcx\t$s1, $s2\n"
-    body *= "\tlea\t4*8($ap), $ap\n"
-    body *= "\tlea\t-4*8($rp), $rp\n"
-    body *= "\tjmp\t.Lam5\n"
+    # For .Lp5, see below
     body *= ".Lp6:"
     body *= "\tmulx\t0*8($ap), $s0, $s1\n"
     body *= "\tadcx\t$s3, $s0\n"
@@ -700,15 +717,31 @@ ifdef(`PIC',
     body *= "\tlea\t-2*8($ap), $ap\n"
     body *= "\tlea\t-2*8($rp), $rp\n"
     body *= "\tjmp\t.Lam7\n"
-    body *= ".Lp2:"
-    body *= "\tmulx\t0*8($ap), $s0, $s1\n"
-    body *= "\tadcx\t$s3, $s0\n"
-    body *= "\tlea\t1*8($ap), $ap\n"
-    body *= "\tlea\t1*8($rp), $rp\n"
-    # body *= "\tjmp\t.Lam2\n"
     body *= "\n"
+    body *= ".Lp5:"
+    body *= "\tmulx\t0*8($ap), $s2, $s3\n"
+    body *= "\tadcx\t$s1, $s2\n"
+    body *= "\tlea\t4*8($ap), $ap\n"
+    body *= "\tlea\t-4*8($rp), $rp\n"
+    # body *= "\tjmp\t.Lam5\n"
 
     body *= "\t.align\t32, 0x90\n"
+    body *= ".Lam5:"
+    body *= "\tmulx\t-3*8($ap), $s0, $s1\n"
+    body *= "\tadcx\t$s3, $s0\n"
+    body *= "\tadox\t4*8($rp), $s2\n"
+    body *= "\tmov\t$s2, 4*8($rp)\n"
+    body *= ".Lam4:"
+    body *= "\tmulx\t-2*8($ap), $s2, $s3\n"
+    body *= "\tadox\t5*8($rp), $s0\n"
+    body *= "\tadcx\t$s1, $s2\n"
+    body *= "\tmov\t$s0, 5*8($rp)\n"
+    body *= ".Lam3:"
+    body *= "\tadox\t6*8($rp), $s2\n"
+    body *= "\tmulx\t-1*8($ap), $s0, $s1\n"
+    body *= "\tmov\t$s2, 6*8($rp)\n"
+    body *= "\tlea\t8*8($rp), $rp\n"
+    body *= "\tadcx\t$s3, $s0\n"
     body *= ".Lam2:"
     body *= "\tmulx\t0*8($ap), $s2, $s3\n"
     body *= "\tadox\t-1*8($rp), $s0\n"
@@ -740,23 +773,7 @@ ifdef(`PIC',
     body *= "\tadox\t3*8($rp), $s0\n"
     body *= "\tadcx\t$s1, $s2\n"
     body *= "\tmov\t$s0, 3*8($rp)\n"
-    body *= ".Lam5:"
-    body *= "\tmulx\t-3*8($ap), $s0, $s1\n"
-    body *= "\tadcx\t$s3, $s0\n"
-    body *= "\tadox\t4*8($rp), $s2\n"
-    body *= "\tmov\t$s2, 4*8($rp)\n"
-    body *= ".Lam4:"
-    body *= "\tmulx\t-2*8($ap), $s2, $s3\n"
-    body *= "\tadox\t5*8($rp), $s0\n"
-    body *= "\tadcx\t$s1, $s2\n"
-    body *= "\tmov\t$s0, 5*8($rp)\n"
-    body *= ".Lam3:"
-    body *= "\tadox\t6*8($rp), $s2\n"
-    body *= "\tmulx\t-1*8($ap), $s0, $s1\n"
-    body *= "\tmov\t$s2, 6*8($rp)\n"
-    body *= "\tlea\t8*8($rp), $rp\n"
-    body *= "\tadcx\t$s3, $s0\n"
-    body *= "\tjmp\t.Lamtop\n"
+    body *= "\tjmp\t.Lam5\n"
     body *= "\n"
 
     # Post addmul-loop
@@ -764,16 +781,16 @@ ifdef(`PIC',
     body *= "\tadox\t0*8($rp), $s2\n"
     body *= "\tadcx\t$m, $s3\n" # Assumes m = 0
     body *= "\tadox\t$m, $s3\n"
-    body *= "\tlea\t1($m_save), $m\n"
+    body *= "\tlea\t1($m_save), $m\n" # Increase m
     body *= "\tneg\t$m_save\n"
-    body *= "\tlea\t1*8($bp), $bp\n"
+    body *= "\tlea\t1*8($bp), $bp\n" # Increase bp
     body *= "\tmov\t$s2, 0*8($rp)\n"
     body *= "\tmov\t$s3, 1*8($rp)\n"
-    body *= "\tlea\t($rp,$m_save,8), $rp\n"
-    body *= "\tlea\t($ap,$m_save,8), $ap\n"
+    body *= "\tlea\t($rp,$m_save,8), $rp\n" # Reset rp
+    body *= "\tlea\t($ap,$m_save,8), $ap\n" # Reset ap
     body *= "\tneg\t$m_save\n"
-    body *= "\tcmp\t$m, $n\n"
-    body *= "\tlea\t1($m_save), $m_save\n"
+    body *= "\tcmp\t$n, $m\n"
+    body *= "\tlea\t1($m_save), $m_save\n" # Increase m_save
 
     # If m < n, continue looping
     body *= "\tjb\t.Lloop\n"
@@ -782,6 +799,7 @@ ifdef(`PIC',
     body *= "\tja\t.Lexit\n"
 
     # Else, m == n and so we perform the last addmul chain
+    body *= ".Ltmp:" # FIXME Remove
     body *= "\tmov\t0*8($bp), %rdx\n"
     body *= "\txor\t$(R32(s1)), $(R32(s1))\n" # Set s1 to zero and reset flags
     body *= "\tjmp\t.Lfin\n"

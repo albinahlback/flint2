@@ -14,10 +14,9 @@
 
 #if FLINT_HAVE_MPN_MULHIGH_N_BASECASE
 
-#define K 3
-
-#define N_MIN (K + 2)
-#define N_MAX 12
+#define N_MIN 5
+#define N_MAX N_MIN
+/* #define N_MAX 12 */
 
 TEST_FUNCTION_START(flint_mpn_mulhigh_n_basecase, state)
 {
@@ -50,19 +49,19 @@ TEST_FUNCTION_START(flint_mpn_mulhigh_n_basecase, state)
                     "yp = %{ulong*}\n"
                     "Expected: %{ulong*}\n"
                     "Got:      %{ulong*}\n",
-                    ix, n, xp, n, yp, n, rp1, K + 1, rp2, K + 1);
+                    ix, n, xp, n, yp, n, rp1, n + 1, rp2, n + 1);
 
-        result = (mpn_cmp(rp1, rp2, K + 1) == 0);
+        result = (mpn_cmp(rp1, rp2, n + 1) == 0);
         if (!result)
             TEST_FUNCTION_FAIL(
-                    "First %d values are not the same\n"
+                    "Result not the same\n"
                     "ix = %wd\n"
                     "n = %wd\n"
                     "xp = %{ulong*}\n"
                     "yp = %{ulong*}\n"
                     "Expected: %{ulong*}\n"
                     "Got:      %{ulong*}\n",
-                    K + 1, ix, n, xp, n, yp, n, rp1, K + 1, rp2, K + 1);
+                    ix, n, xp, n, yp, n, rp1, n + 1, rp2, n + 1);
     }
 
     TEST_FUNCTION_END(state);

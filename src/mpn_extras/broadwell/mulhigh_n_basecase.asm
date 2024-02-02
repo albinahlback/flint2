@@ -42,11 +42,13 @@ include(`config.m4')dnl
 dnl
 .text
 
-.macro	tr_4 ap=%rsi, ap_os=0, bp=%r8, bp_os=0r0, r1, r2, r3, r4, sc, zr
+.macro	tr_4 ap=%rsi, ap_os=0, bp=%r8, bp_os=0, r0, r1, r2, r3, r4, sc, zr, zr32
+	mov	(\bp_os + 0)*8(\bp), %rdx
 	mulx	(\ap_os - 1)*8(\ap), \r0, \r0
 	mulx	(\ap_os - 0)*8(\ap), \sc, \r1
-	adcx	\sc, \r0
-	adcx	\zr, \r1
+	add	\sc, \r0
+	adc	$0, \r1
+	xor	\zr32, \zr32
 
 	mov	(\bp_os + 1)*8(\bp), %rdx
 	mulx	(\ap_os - 2)*8(\ap), \sc, \sc
@@ -99,37 +101,34 @@ FUNC(flint_mpn_mulhigh_n_basecase):
 	.cfi_startproc
 	mov	%rdx, %r8
 	lea	-4*8(%rsi,%rcx,8), %rsi
-	lea	-1(%rcx), %rcx
 	lea	4*8(%r8), %r8
 	push	%rbx
 	push	%rbp
 	push	%r12
 
-	mov	0*8(%r8), %rdx
-	xor	%r10d, %r10d
-	tr_4	%rsi, 3, %r8, -4, %rax, %r11, %rbx, %rbp, %r12, %r9, %r10
+	tr_4	%rsi, 3, %r8, -4, %rax, %r11, %rbx, %rbp, %r12, %r9, %r10, %r10d
 	mov	%r11, 0*8(%rdi)
 	mov	%rbx, 1*8(%rdi)
 	mov	%rbp, 2*8(%rdi)
 	mov	%r12, 3*8(%rdi)
 
-	mov	%rcx, %r9
+	lea	-1(%rcx), %r9
 	mov	$4, %r10d
 	mov	$4, %ecx
+	jmp	.Ltmp
 	.align	32, 0x90
 .Lloop:	mov	0*8(%r8), %rdx
-	test	%al, %al
 	mulx	-2*8(%rsi), %rbp, %rbp
-.Lfin:	mulx	-1*8(%rsi), %r12, %r11
+.Lfin:	mov	%ecx, %ebx
+	shr	$3, %rcx
+	and	$7, %ebx
+	mulx	-1*8(%rsi), %r12, %r11
 	adcx	%rbp, %rax
 	adox	%r12, %rax
 	mov	%r11, %rbp
-	mov	%ecx, %ebx
-	shr	$3, %rcx
-	and	$7, %ebx
 	lea	.Ljmptab(%rip), %r12
 ifdef(`PIC',
-`	movsxd	(%r12,%rbx,4), %rbx
+`	movslq	(%r12,%rbx,4), %rbx
 	lea	(%rbx,%r12), %r12
 	jmp	*%r12
 ',`
@@ -139,14 +138,14 @@ ifdef(`PIC',
 	.align	8, 0x90
 ifdef(`PIC',
 `.Ljmptab:
-	.long	.Lp0-.Ltab
-	.long	.Lp1-.Ltab
-	.long	.Lp2-.Ltab
-	.long	.Lp3-.Ltab
-	.long	.Lp4-.Ltab
-	.long	.Lp5-.Ltab
-	.long	.Lp6-.Ltab
-	.long	.Lp7-.Ltab',
+	.long	.Lp0-.Ljmptab
+	.long	.Lp1-.Ljmptab
+	.long	.Lp2-.Ljmptab
+	.long	.Lp3-.Ljmptab
+	.long	.Lp4-.Ljmptab
+	.long	.Lp5-.Ljmptab
+	.long	.Lp6-.Ljmptab
+	.long	.Lp7-.Ljmptab',
 `.Ljmptab:
 	.quad	.Lp0
 	.quad	.Lp1
@@ -167,6 +166,11 @@ ifdef(`PIC',
 .Lp1:	mulx	0*8(%rsi), %r12, %r11
 	adcx	%rbp, %r12
 	jmp	.Lam1
+.Lp2:	mulx	0*8(%rsi), %rbx, %rbp
+	adcx	%r11, %rbx
+	lea	1*8(%rsi), %rsi
+	lea	1*8(%rdi), %rdi
+	jmp	.Lam2
 .Lp3:	mulx	0*8(%rsi), %r12, %r11
 	adcx	%rbp, %r12
 	lea	2*8(%rsi), %rsi
@@ -177,11 +181,6 @@ ifdef(`PIC',
 	lea	3*8(%rsi), %rsi
 	lea	-5*8(%rdi), %rdi
 	jmp	.Lam4
-.Lp5:	mulx	0*8(%rsi), %r12, %r11
-	adcx	%rbp, %r12
-	lea	4*8(%rsi), %rsi
-	lea	-4*8(%rdi), %rdi
-	jmp	.Lam5
 .Lp6:	mulx	0*8(%rsi), %rbx, %rbp
 	adcx	%r11, %rbx
 	lea	5*8(%rsi), %rsi
@@ -192,12 +191,25 @@ ifdef(`PIC',
 	lea	-2*8(%rsi), %rsi
 	lea	-2*8(%rdi), %rdi
 	jmp	.Lam7
-.Lp2:	mulx	0*8(%rsi), %rbx, %rbp
-	adcx	%r11, %rbx
-	lea	1*8(%rsi), %rsi
-	lea	1*8(%rdi), %rdi
 
+.Lp5:	mulx	0*8(%rsi), %r12, %r11
+	adcx	%rbp, %r12
+	lea	4*8(%rsi), %rsi
+	lea	-4*8(%rdi), %rdi
 	.align	32, 0x90
+.Lam5:	mulx	-3*8(%rsi), %rbx, %rbp
+	adcx	%r11, %rbx
+	adox	4*8(%rdi), %r12
+	mov	%r12, 4*8(%rdi)
+.Lam4:	mulx	-2*8(%rsi), %r12, %r11
+	adox	5*8(%rdi), %rbx
+	adcx	%rbp, %r12
+	mov	%rbx, 5*8(%rdi)
+.Lam3:	adox	6*8(%rdi), %r12
+	mulx	-1*8(%rsi), %rbx, %rbp
+	mov	%r12, 6*8(%rdi)
+	lea	8*8(%rdi), %rdi
+	adcx	%r11, %rbx
 .Lam2:	mulx	0*8(%rsi), %r12, %r11
 	adox	-1*8(%rdi), %rbx
 	adcx	%rbp, %r12
@@ -221,20 +233,7 @@ ifdef(`PIC',
 	adox	3*8(%rdi), %rbx
 	adcx	%rbp, %r12
 	mov	%rbx, 3*8(%rdi)
-.Lam5:	mulx	-3*8(%rsi), %rbx, %rbp
-	adcx	%r11, %rbx
-	adox	4*8(%rdi), %r12
-	mov	%r12, 4*8(%rdi)
-.Lam4:	mulx	-2*8(%rsi), %r12, %r11
-	adox	5*8(%rdi), %rbx
-	adcx	%rbp, %r12
-	mov	%rbx, 5*8(%rdi)
-.Lam3:	adox	6*8(%rdi), %r12
-	mulx	-1*8(%rsi), %rbx, %rbp
-	mov	%r12, 6*8(%rdi)
-	lea	8*8(%rdi), %rdi
-	adcx	%r11, %rbx
-	jmp	.Lamtop
+	jmp	.Lam5
 
 .Lend:	adox	0*8(%rdi), %r12
 	adcx	%rcx, %r11
@@ -247,11 +246,11 @@ ifdef(`PIC',
 	lea	(%rdi,%r10,8), %rdi
 	lea	(%rsi,%r10,8), %rsi
 	neg	%r10
-	cmp	%rcx, %r9
+	cmp	%r9, %rcx
 	lea	1(%r10), %r10
 	jb	.Lloop
 	ja	.Lexit
-	mov	0*8(%r8), %rdx
+.Ltmp:	mov	0*8(%r8), %rdx
 	xor	%ebp, %ebp
 	jmp	.Lfin
 
