@@ -38,59 +38,88 @@
 #   (at your option) any later version.  See <https://www.gnu.org/licenses/>.
 #
 
-include(`config.m4')dnl
-dnl
+include(`config.m4')
+
+define(`rp',	`%rdi')
+define(`ap',	`%rsi')
+define(`bp_old',	`%rdx')
+define(`n_old',	`%rcx')
+
+define(`bp',	`%r8')
+define(`ret',	`%rax')
+
+define(`r0',	`%r11')
+define(`r1',	`%rbx')
+define(`r2',	`%rbp')
+define(`r3',	`%r12')
+
+define(`s0',	`%rbx')
+define(`s0_32',	`%ebx')
+define(`s1',	`%rbp')
+define(`s2',	`%r12')
+define(`s3',	`%r11')
+
+define(`sc',	`%r9')
+define(`zr',	`%r10')
+define(`zr_32',	`%r10d')
+
+define(`n',	`%r9')
+define(`m',	`%rcx')
+define(`m_32',	`%ecx')
+define(`m_save',	`%r10')
+define(`m_save_32',	`%r10d')
+
 .text
 
-.macro	tr_4 ap=%rsi, ap_os=0, bp=%r8, bp_os=0, r0, r1, r2, r3, r4, sc, zr, zr32
+.macro	tr_4 ap=%rsi, ap_os=0, bp=%r8, bp_os=0, t0, t1, t2, t3, t4, sc1, sc2, sc2_32
 	mov	(\bp_os + 0)*8(\bp), %rdx
-	mulx	(\ap_os - 1)*8(\ap), \r0, \r0
-	mulx	(\ap_os - 0)*8(\ap), \sc, \r1
-	add	\sc, \r0
-	adc	$0, \r1
-	xor	\zr32, \zr32
+	mulx	(\ap_os - 1)*8(\ap), \t0, \t0
+	mulx	(\ap_os - 0)*8(\ap), \sc1, \t1
+	add	\sc1, \t0
+	adc	$0, \t1
+	xor	\sc2_32, \sc2_32
 
 	mov	(\bp_os + 1)*8(\bp), %rdx
-	mulx	(\ap_os - 2)*8(\ap), \sc, \sc
-	adcx	\sc, \r0
-	mulx	(\ap_os - 1)*8(\ap), \sc, \r2
-	adox	\sc, \r0
-	adcx	\r2, \r1
-	mulx	(\ap_os - 0)*8(\ap), \sc, \r2
-	adox	\sc, \r1
-	adcx	\zr, \r2
-	adox	\zr, \r2
+	mulx	(\ap_os - 2)*8(\ap), \sc1, \sc1
+	adcx	\sc1, \t0
+	mulx	(\ap_os - 1)*8(\ap), \sc1, \t2
+	adox	\sc1, \t0
+	adcx	\t2, \t1
+	mulx	(\ap_os - 0)*8(\ap), \sc1, \t2
+	adox	\sc1, \t1
+	adcx	\sc2, \t2
+	adox	\sc2, \t2
 
 	mov	(\bp_os + 2)*8(\bp), %rdx
-	mulx	(\ap_os - 3)*8(\ap), \sc, \sc
-	adcx	\sc, \r0
-	mulx	(\ap_os - 2)*8(\ap), \sc, \r3
-	adox	\sc, \r0
-	adcx	\r3, \r1
-	mulx	(\ap_os - 1)*8(\ap), \sc, \r3
-	adox	\sc, \r1
-	adcx	\r3, \r2
-	mulx	(\ap_os - 0)*8(\ap), \sc, \r3
-	adox	\sc, \r2
-	adcx	\zr, \r3
-	adox	\zr, \r3
+	mulx	(\ap_os - 3)*8(\ap), \sc1, \sc1
+	adcx	\sc1, \t0
+	mulx	(\ap_os - 2)*8(\ap), \sc1, \t3
+	adox	\sc1, \t0
+	adcx	\t3, \t1
+	mulx	(\ap_os - 1)*8(\ap), \sc1, \t3
+	adox	\sc1, \t1
+	adcx	\t3, \t2
+	mulx	(\ap_os - 0)*8(\ap), \sc1, \t3
+	adox	\sc1, \t2
+	adcx	\sc2, \t3
+	adox	\sc2, \t3
 
 	mov	(\bp_os + 3)*8(\bp), %rdx
-	mulx	(\ap_os - 4)*8(\ap), \sc, \sc
-	adcx	\sc, \r0
-	mulx	(\ap_os - 3)*8(\ap), \sc, \r4
-	adox	\sc, \r0
-	adcx	\r4, \r1
-	mulx	(\ap_os - 2)*8(\ap), \sc, \r4
-	adox	\sc, \r1
-	adcx	\r4, \r2
-	mulx	(\ap_os - 1)*8(\ap), \sc, \r4
-	adox	\sc, \r2
-	adcx	\r4, \r3
-	mulx	(\ap_os - 0)*8(\ap), \sc, \r4
-	adox	\sc, \r3
-	adcx	\zr, \r4
-	adox	\zr, \r4
+	mulx	(\ap_os - 4)*8(\ap), \sc1, \sc1
+	adcx	\sc1, \t0
+	mulx	(\ap_os - 3)*8(\ap), \sc1, \t4
+	adox	\sc1, \t0
+	adcx	\t4, \t1
+	mulx	(\ap_os - 2)*8(\ap), \sc1, \t4
+	adox	\sc1, \t1
+	adcx	\t4, \t2
+	mulx	(\ap_os - 1)*8(\ap), \sc1, \t4
+	adox	\sc1, \t2
+	adcx	\t4, \t3
+	mulx	(\ap_os - 0)*8(\ap), \sc1, \t4
+	adox	\sc1, \t3
+	adcx	\sc2, \t4
+	adox	\sc2, \t4
 .endm
 
 .global	FUNC(flint_mpn_mulhigh_n_basecase)
@@ -99,29 +128,32 @@ TYPE(flint_mpn_mulhigh_n_basecase)
 
 FUNC(flint_mpn_mulhigh_n_basecase):
 	.cfi_startproc
-	mov	%rdx, %r8
-	lea	-4*8(%rsi,%rcx,8), %rsi
-	lea	4*8(%r8), %r8
+	mov	bp_old, bp
+	lea	-4*8(ap,n_old,8), ap	# ap += n - 4
+	lea	4*8(bp), bp		# bp += 4
+
 	push	%rbx
 	push	%rbp
 	push	%r12
 
-	tr_4	%rsi, 3, %r8, -4, %rax, %r11, %rbx, %rbp, %r12, %r9, %r10, %r10d
-	mov	%r11, 0*8(%rdi)
-	mov	%rbx, 1*8(%rdi)
-	mov	%rbp, 2*8(%rdi)
-	mov	%r12, 3*8(%rdi)
+	# Initial triangle
+	tr_4	ap, 3, bp, -4, ret, r0, r1, r2, r3, sc, zr, zr_32
+	mov	r0, 0*8(rp)
+	mov	r1, 1*8(rp)
+	mov	r2, 2*8(rp)
+	mov	r3, 3*8(rp)
 
-	lea	-1(%rcx), %r9
-	mov	$4, %r10d
-	mov	$4, %ecx
-	jmp	.Ltmp
+	# Addmul chains
+	lea	-1(n_old), n
+	mov	$4, m_save_32
+	mov	$4, m_32
+
 	.align	32, 0x90
-.Lloop:	mov	0*8(%r8), %rdx
-	mulx	-2*8(%rsi), %rbp, %rbp
-.Lfin:	mov	%ecx, %ebx
-	shr	$3, %rcx
-	and	$7, %ebx
+.Lloop:	mov	0*8(bp), %rdx
+	mulx	-2*8(ap), s1, s1
+.Lfin:	mov	m_32, s0_32
+	shr	$3, m
+	and	$7, s0_32
 	mulx	-1*8(%rsi), %r12, %r11
 	adcx	%rbp, %rax
 	adox	%r12, %rax
@@ -243,14 +275,14 @@ ifdef(`PIC',
 	lea	1*8(%r8), %r8
 	mov	%r12, 0*8(%rdi)
 	mov	%r11, 1*8(%rdi)
-	lea	(%rdi,%r10,8), %rdi
+	lea	1*8(%rdi,%r10,8), %rdi
 	lea	(%rsi,%r10,8), %rsi
 	neg	%r10
 	cmp	%r9, %rcx
 	lea	1(%r10), %r10
 	jb	.Lloop
 	ja	.Lexit
-.Ltmp:	mov	0*8(%r8), %rdx
+	mov	0*8(%r8), %rdx
 	xor	%ebp, %ebp
 	jmp	.Lfin
 

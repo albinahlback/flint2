@@ -15,7 +15,7 @@
 #if FLINT_HAVE_MPN_MULHIGH_N_BASECASE
 
 #define N_MIN 5
-#define N_MAX N_MIN
+#define N_MAX 6
 /* #define N_MAX 12 */
 
 TEST_FUNCTION_START(flint_mpn_mulhigh_n_basecase, state)
@@ -25,19 +25,21 @@ TEST_FUNCTION_START(flint_mpn_mulhigh_n_basecase, state)
 
     for (ix = 0; ix < 100000 * flint_test_multiplier(); ix++)
     {
-        mp_limb_t rp1[N_MAX + 1] = {UWORD(0)};
-        mp_limb_t rp2[N_MAX + 1] = {UWORD(0)};
-        mp_limb_t xp[N_MAX];
-        mp_limb_t yp[N_MAX];
+        mp_limb_t rp1[N_MAX + 1];
+        mp_limb_t rp2[N_MAX + 1];
+        mp_limb_t xp[N_MAX + 10];
+        mp_limb_t yp[N_MAX + 10];
         mp_size_t n;
 
         n = N_MIN + n_randint(state, N_MAX - N_MIN + 1);
 
-        mpn_random2(xp, n);
-        mpn_random2(yp, n);
+        mpn_random2(xp, N_MAX + 10);
+        mpn_random2(yp, N_MAX + 10);
 
         rp1[0] = flint_mpn_mulhigh_n(rp1 + 1, xp, yp, n);
         rp2[0] = flint_mpn_mulhigh_n_basecase(rp2 + 1, xp, yp, n);
+
+        flint_printf("ix = %ld\nn = %ld\n", ix, n);
 
         result = (rp1[0] == rp2[0]);
         if (!result)

@@ -513,7 +513,7 @@ end
 #
 # a/b 0  1  2  3  4  5
 #   +-----------------
-#  0|          ^  h  x
+#  0|             h  x
 #  1|          h  x  x
 #  2|       h  x  ø  x <- (ap, bp) will initially point to ø
 #  3|    h  x  x  x  x
@@ -578,7 +578,7 @@ function mulhigh_basecase(k::Int)
     body *= "\n"
 
     ###########################################################################
-    # Do initial triangle FIXME Seems to work!
+    # Do initial triangle
     ###########################################################################
     r = [_regs[8]; __regs[1:3]]
     sc = _regs[6] # scrap register
@@ -613,7 +613,6 @@ function mulhigh_basecase(k::Int)
     m, m_save = _regs[4], _regs[7]
     body *= "\tmov\t\$$(k), $(R32(m_save))\n"
     body *= "\tmov\t\$$(k), $(R32(m))\n"
-    body *= "\tjmp\t.Ltmp\n" # FIXME Remove
 
     # Declare four scrap registers
     s0, s1, s2, s3 = __regs[1], __regs[2], __regs[3], _regs[8]
@@ -630,7 +629,7 @@ function mulhigh_basecase(k::Int)
     body *= ".Lfin:"
     body *= "\tmov\t$(R32(m)), $(R32(s0))\n"
     body *= "\tshr\t\$3, $m\n"
-    body *= "\tand\t\$7, $(R32(s0))\n" # Resets flags from shr
+    body *= "\tand\t\$7, $(R32(s0))\n" # Also resets flags from shr
 
     # Continue computing stuff contributing to ret
     body *= "\tmulx\t-1*8($ap), $s2, $s3\n"
@@ -786,7 +785,7 @@ ifdef(`PIC',
     body *= "\tlea\t1*8($bp), $bp\n" # Increase bp
     body *= "\tmov\t$s2, 0*8($rp)\n"
     body *= "\tmov\t$s3, 1*8($rp)\n"
-    body *= "\tlea\t($rp,$m_save,8), $rp\n" # Reset rp
+    body *= "\tlea\t1*8($rp,$m_save,8), $rp\n" # Reset rp
     body *= "\tlea\t($ap,$m_save,8), $ap\n" # Reset ap
     body *= "\tneg\t$m_save\n"
     body *= "\tcmp\t$n, $m\n"
@@ -799,9 +798,8 @@ ifdef(`PIC',
     body *= "\tja\t.Lexit\n"
 
     # Else, m == n and so we perform the last addmul chain
-    body *= ".Ltmp:" # FIXME Remove
     body *= "\tmov\t0*8($bp), %rdx\n"
-    body *= "\txor\t$(R32(s1)), $(R32(s1))\n" # Set s1 to zero and reset flags
+    body *= "\txor\t$(R32(s1)), $(R32(s1))\n" # Set s1 to zero
     body *= "\tjmp\t.Lfin\n"
     body *= "\n"
 
