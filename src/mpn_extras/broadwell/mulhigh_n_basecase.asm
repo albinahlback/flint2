@@ -1,32 +1,32 @@
-#  AMD64 mpn_addmul_1 optimised for Intel Broadwell.
-#
-#  Copyright 2015, 2017 Free Software Foundation, Inc.
-#
-#  This file is part of the GNU MP Library.
-#
-#  The GNU MP Library is free software; you can redistribute it and/or modify
-#  it under the terms of either:
-#
-#    * the GNU Lesser General Public License as published by the Free
-#      Software Foundation; either version 3 of the License, or (at your
-#      option) any later version.
-#
-#  or
-#
-#    * the GNU General Public License as published by the Free Software
-#      Foundation; either version 2 of the License, or (at your option) any
-#      later version.
-#
-#  or both in parallel, as here.
-#
-#  The GNU MP Library is distributed in the hope that it will be useful, but
-#  WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-#  or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
-#  for more details.
-#
-#  You should have received copies of the GNU General Public License and the
-#  GNU Lesser General Public License along with the GNU MP Library.  If not,
-#  see https://www.gnu.org/licenses/.
+dnl  AMD64 mpn_addmul_1 optimised for Intel Broadwell.
+
+dnl  Copyright 2015, 2017 Free Software Foundation, Inc.
+
+dnl  This file is part of the GNU MP Library.
+dnl
+dnl  The GNU MP Library is free software; you can redistribute it and/or modify
+dnl  it under the terms of either:
+dnl
+dnl    * the GNU Lesser General Public License as published by the Free
+dnl      Software Foundation; either version 3 of the License, or (at your
+dnl      option) any later version.
+dnl
+dnl  or
+dnl
+dnl    * the GNU General Public License as published by the Free Software
+dnl      Foundation; either version 2 of the License, or (at your option) any
+dnl      later version.
+dnl
+dnl  or both in parallel, as here.
+dnl
+dnl  The GNU MP Library is distributed in the hope that it will be useful, but
+dnl  WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+dnl  or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+dnl  for more details.
+dnl
+dnl  You should have received copies of the GNU General Public License and the
+dnl  GNU Lesser General Public License along with the GNU MP Library.  If not,
+dnl  see https://www.gnu.org/licenses/.
 #
 #   Copyright (C) 2024 Albin Ahlbäck
 #
@@ -42,7 +42,7 @@ include(`config.m4')
 
 define(`rp',	`%rdi')
 define(`ap',	`%rsi')
-define(`bp_old',	`%rdx')
+define(`bp_old',`%rdx')
 define(`n_old',	`%rcx')
 
 define(`bp',	`%r8')
@@ -53,74 +53,20 @@ define(`r1',	`%rbx')
 define(`r2',	`%rbp')
 define(`r3',	`%r12')
 
-define(`s0',	`%rbx')
-define(`s0_32',	`%ebx')
-define(`s1',	`%rbp')
-define(`s2',	`%r12')
-define(`s3',	`%r11')
-
-define(`sc',	`%r9')
+define(`w0',	`%r9')	dnl scrap registers
+define(`w1',	`%r13')
 define(`zr',	`%r10')
-define(`zr_32',	`%r10d')
+
+; define(`s0',	`%rbx')
+; define(`s1',	`%rbp')
+; define(`s2',	`%r12')
+; define(`s3',	`%r11')
 
 define(`n',	`%r9')
 define(`m',	`%rcx')
-define(`m_32',	`%ecx')
-define(`m_save',	`%r10')
-define(`m_save_32',	`%r10d')
+define(`m_save',`%r10')
 
 .text
-
-.macro	tr_4 ap=%rsi, ap_os=0, bp=%r8, bp_os=0, t0, t1, t2, t3, t4, sc1, sc2, sc2_32
-	mov	(\bp_os + 0)*8(\bp), %rdx
-	mulx	(\ap_os - 1)*8(\ap), \t0, \t0
-	mulx	(\ap_os - 0)*8(\ap), \sc1, \t1
-	add	\sc1, \t0
-	adc	$0, \t1
-	xor	\sc2_32, \sc2_32
-
-	mov	(\bp_os + 1)*8(\bp), %rdx
-	mulx	(\ap_os - 2)*8(\ap), \sc1, \sc1
-	adcx	\sc1, \t0
-	mulx	(\ap_os - 1)*8(\ap), \sc1, \t2
-	adox	\sc1, \t0
-	adcx	\t2, \t1
-	mulx	(\ap_os - 0)*8(\ap), \sc1, \t2
-	adox	\sc1, \t1
-	adcx	\sc2, \t2
-	adox	\sc2, \t2
-
-	mov	(\bp_os + 2)*8(\bp), %rdx
-	mulx	(\ap_os - 3)*8(\ap), \sc1, \sc1
-	adcx	\sc1, \t0
-	mulx	(\ap_os - 2)*8(\ap), \sc1, \t3
-	adox	\sc1, \t0
-	adcx	\t3, \t1
-	mulx	(\ap_os - 1)*8(\ap), \sc1, \t3
-	adox	\sc1, \t1
-	adcx	\t3, \t2
-	mulx	(\ap_os - 0)*8(\ap), \sc1, \t3
-	adox	\sc1, \t2
-	adcx	\sc2, \t3
-	adox	\sc2, \t3
-
-	mov	(\bp_os + 3)*8(\bp), %rdx
-	mulx	(\ap_os - 4)*8(\ap), \sc1, \sc1
-	adcx	\sc1, \t0
-	mulx	(\ap_os - 3)*8(\ap), \sc1, \t4
-	adox	\sc1, \t0
-	adcx	\t4, \t1
-	mulx	(\ap_os - 2)*8(\ap), \sc1, \t4
-	adox	\sc1, \t1
-	adcx	\t4, \t2
-	mulx	(\ap_os - 1)*8(\ap), \sc1, \t4
-	adox	\sc1, \t2
-	adcx	\t4, \t3
-	mulx	(\ap_os - 0)*8(\ap), \sc1, \t4
-	adox	\sc1, \t3
-	adcx	\sc2, \t4
-	adox	\sc2, \t4
-.endm
 
 .global	FUNC(flint_mpn_mulhigh_n_basecase)
 .p2align	5, 0x90
@@ -135,9 +81,58 @@ FUNC(flint_mpn_mulhigh_n_basecase):
 	push	%rbx
 	push	%rbp
 	push	%r12
+	push	%r13
 
 	# Initial triangle
-	tr_4	ap, 3, bp, -4, ret, r0, r1, r2, r3, sc, zr, zr_32
+	xor	R32(zr), R32(zr)
+	mov	-4*8(bp), %rdx
+	mulx	2*8(ap), ret, ret
+	mulx	3*8(ap), w0, r0
+	add	w0, ret
+	adc	zr, r0
+
+	mov	-3*8(bp), %rdx
+	mulx	1*8(ap), w0, w0
+	mulx	2*8(ap), w1, r2
+	mulx	3*8(ap), r3, r1
+	add	w0, ret
+	adc	r2, r0
+	adc	zr, r1
+	add	w1, ret
+	adc	r3, r0
+	adc	zr, r1
+
+	mov	-2*8(bp), %rdx
+	mulx	0*8(ap), w0, w0
+	mulx	1*8(ap), r2, w1
+	add	r2, w0
+	mulx	2*8(ap), r2, r3
+	mulx	3*8(ap), %rdx, r2
+	adc	w2, w1
+	adc	%rdx, r3
+	adc	$0, r2
+	add	w0, ret
+	adc	w1, r0
+	adc	r3, r1
+	adc	w2, r2
+
+	mov	-1*8(bp), %rdx
+	mulx	-1*8(ap), w0, w0
+	adcx	w0, ret
+	mulx	0*8(ap), w0, r3
+	adox	w0, ret
+	adcx	r3, r0
+	mulx	1*8(ap), w0, r3
+	adox	w0, r0
+	adcx	r3, r1
+	mulx	2*8(ap), w0, r3
+	adox	w0, r1
+	adcx	r3, r2
+	mulx	3*8(ap), w0, r3
+	adox	w0, r2
+	adox	w1, r3
+	adc	w1, r3
+
 	mov	r0, 0*8(rp)
 	mov	r1, 1*8(rp)
 	mov	r2, 2*8(rp)
