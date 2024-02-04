@@ -46,37 +46,39 @@ define(`bp_old',`%rdx')
 define(`n_old',	`%rcx')
 
 define(`bp',	`%r8')
-define(`ret',	`%rax')
+define(`rt',	`%rax')
 
 define(`r0',	`%r11')
 define(`r1',	`%rbx')
 define(`r2',	`%rbp')
 define(`r3',	`%r12')
+define(`r4',	`%r13')
 
-define(`w0',	`%r9')	dnl scrap registers
-define(`w1',	`%r13')
+define(`sc',	`%r9')
 define(`zr',	`%r10')
-
-; define(`s0',	`%rbx')
-; define(`s1',	`%rbp')
-; define(`s2',	`%r12')
-; define(`s3',	`%r11')
 
 define(`n',	`%r9')
 define(`m',	`%rcx')
 define(`m_save',`%r10')
 
+# We need
+#
+# rp, ap, bp, n
+#
+# k + 2 registers to hold k multiplications plus one carry
+#
+# 
+
 .text
 
 .global	FUNC(flint_mpn_mulhigh_n_basecase)
-.p2align	5, 0x90
+ALIGN(32)
 TYPE(flint_mpn_mulhigh_n_basecase)
 
 FUNC(flint_mpn_mulhigh_n_basecase):
 	.cfi_startproc
 	mov	bp_old, bp
-	lea	-4*8(ap,n_old,8), ap	# ap += n - 4
-	lea	4*8(bp), bp		# bp += 4
+	lea	-1*8(ap,n_old,8), ap	# ap += n - 1
 
 	push	%rbx
 	push	%rbp
@@ -85,203 +87,97 @@ FUNC(flint_mpn_mulhigh_n_basecase):
 
 	# Initial triangle
 	xor	R32(zr), R32(zr)
-	mov	-4*8(bp), %rdx
-	mulx	2*8(ap), ret, ret
-	mulx	3*8(ap), w0, r0
-	add	w0, ret
+	mov	0*8(bp), %rdx
+	mulx	-1*8(ap), rt, rt
+	mulx	0*8(ap), sc, r0
+	add	sc, rt
 	adc	zr, r0
 
-	mov	-3*8(bp), %rdx
-	mulx	1*8(ap), w0, w0
-	mulx	2*8(ap), w1, r2
-	mulx	3*8(ap), r3, r1
-	add	w0, ret
-	adc	r2, r0
+	mov	1*8(bp), %rdx
+	mulx	-2*8(ap), sc, sc
+	mulx	-1*8(ap), r2, r3
+	mulx	0*8(ap), %rdx, r1
+	add	r2, rt
+	adc	%rdx, r0
 	adc	zr, r1
-	add	w1, ret
+	add	sc, rt
 	adc	r3, r0
 	adc	zr, r1
 
-	mov	-2*8(bp), %rdx
-	mulx	0*8(ap), w0, w0
-	mulx	1*8(ap), r2, w1
-	add	r2, w0
-	mulx	2*8(ap), r2, r3
-	mulx	3*8(ap), %rdx, r2
-	adc	w2, w1
-	adc	%rdx, r3
-	adc	$0, r2
-	add	w0, ret
-	adc	w1, r0
-	adc	r3, r1
-	adc	w2, r2
+	mov	2*8(bp), %rdx
+	mulx	-3*8(ap), sc, sc
+	mulx	-2*8(ap), r3, r2
+	add	sc, rt
+	adc	r2, r0
+	mulx	-1*8(ap), sc, r4
+	mulx	0*8(ap), %rdx, r2
+	adc	r4, r1
+	adc	zr, r2
+	add	r3, rt
+	adc	sc, r0
+	adc	%rdx, r1
+	adc	zr, r2
 
-	mov	-1*8(bp), %rdx
-	mulx	-1*8(ap), w0, w0
-	adcx	w0, ret
-	mulx	0*8(ap), w0, r3
-	adox	w0, ret
-	adcx	r3, r0
-	mulx	1*8(ap), w0, r3
-	adox	w0, r0
-	adcx	r3, r1
-	mulx	2*8(ap), w0, r3
-	adox	w0, r1
-	adcx	r3, r2
-	mulx	3*8(ap), w0, r3
-	adox	w0, r2
-	adox	w1, r3
-	adc	w1, r3
+	# FIXME Remove
+	mov	2*8(bp), %rdx
+	mulx	-3*8(ap), sc, sc
+	mulx	-2*8(ap), r3, r2
+	add	sc, rt
+	adc	r2, r0
+	mulx	-1*8(ap), sc, r4
+	mulx	0*8(ap), %rdx, r2
+	adc	r4, r1
+	adc	zr, r2
+	add	r3, rt
+	adc	sc, r0
+	adc	%rdx, r1
+	adc	zr, r2
 
+	test	%al, %al
+	mov	3*8(bp), %rdx
+	mulx	-4*8(ap), sc, sc
+	mulx	-3*8(ap), r4, r3
+	adox	sc, rt
+	adox	r3, r0
+	adcx	r4, rt
+	mulx	-2*8(ap), sc, r3
+	adcx	sc, r0
+	adox	r3, r1
+	mulx	-1*8(ap), r4, sc
+	adcx	r4, r1
+	adox	sc, r2
+	mulx	0*8(ap), %rdx, r3
+	adcx	%rdx, r2
+	adox	zr, r3
+	adcx	zr, r3
+
+	mov	4*8(bp), %rdx
+	mulx	-5*8(ap), sc, sc
+	adcx	sc, rt
+	mulx	-4*8(ap), r4, sc
+	adox	r4, rt
+	adcx	sc, r0
+	mulx	-3*8(ap), r4, sc
+	adox	r4, r0
+	adcx	sc, r1
 	mov	r0, 0*8(rp)
+	mulx	-2*8(ap), r4, sc
+	adox	r4, r1
+	adcx	sc, r2
 	mov	r1, 1*8(rp)
+	mulx	-1*8(ap), r4, sc
+	mulx	0*8(ap), %rdx, r0
+	adox	r4, r2
+	adox	%rdx, r3
+	adox	zr, r0
 	mov	r2, 2*8(rp)
+	adcx	sc, r3
+	adcx	zr, r0
 	mov	r3, 3*8(rp)
+	mov	r0, 4*8(rp)
 
-	# Addmul chains
-	lea	-1(n_old), n
-	mov	$4, m_save_32
-	mov	$4, m_32
-
-	.align	32, 0x90
-.Lloop:	mov	0*8(bp), %rdx
-	mulx	-2*8(ap), s1, s1
-.Lfin:	mov	m_32, s0_32
-	shr	$3, m
-	and	$7, s0_32
-	mulx	-1*8(%rsi), %r12, %r11
-	adcx	%rbp, %rax
-	adox	%r12, %rax
-	mov	%r11, %rbp
-	lea	.Ljmptab(%rip), %r12
-ifdef(`PIC',
-`	movslq	(%r12,%rbx,4), %rbx
-	lea	(%rbx,%r12), %r12
-	jmp	*%r12
-',`
-	jmp	*(%r12,%rbx,8)
-')
-	.section	.data.rel.ro.local,"a",@progbits
-	.align	8, 0x90
-ifdef(`PIC',
-`.Ljmptab:
-	.long	.Lp0-.Ljmptab
-	.long	.Lp1-.Ljmptab
-	.long	.Lp2-.Ljmptab
-	.long	.Lp3-.Ljmptab
-	.long	.Lp4-.Ljmptab
-	.long	.Lp5-.Ljmptab
-	.long	.Lp6-.Ljmptab
-	.long	.Lp7-.Ljmptab',
-`.Ljmptab:
-	.quad	.Lp0
-	.quad	.Lp1
-	.quad	.Lp2
-	.quad	.Lp3
-	.quad	.Lp4
-	.quad	.Lp5
-	.quad	.Lp6
-	.quad	.Lp7')
-	.text
-
-.Lp0:	mulx	0*8(%rsi), %rbx, %rbp
-	adcx	%r11, %rbx
-	lea	-1*8(%rsi), %rsi
-	lea	-1*8(%rsi), %rdi
-	lea	-1(%rcx), %rcx
-	jmp	.Lam0
-.Lp1:	mulx	0*8(%rsi), %r12, %r11
-	adcx	%rbp, %r12
-	jmp	.Lam1
-.Lp2:	mulx	0*8(%rsi), %rbx, %rbp
-	adcx	%r11, %rbx
-	lea	1*8(%rsi), %rsi
-	lea	1*8(%rdi), %rdi
-	jmp	.Lam2
-.Lp3:	mulx	0*8(%rsi), %r12, %r11
-	adcx	%rbp, %r12
-	lea	2*8(%rsi), %rsi
-	lea	-6*8(%rdi), %rdi
-	jmp	.Lam3
-.Lp4:	mulx	0*8(%rsi), %rbx, %rbp
-	adcx	%r11, %rbx
-	lea	3*8(%rsi), %rsi
-	lea	-5*8(%rdi), %rdi
-	jmp	.Lam4
-.Lp6:	mulx	0*8(%rsi), %rbx, %rbp
-	adcx	%r11, %rbx
-	lea	5*8(%rsi), %rsi
-	lea	-3*8(%rdi), %rdi
-	jmp	.Lam6
-.Lp7:	mulx	0*8(%rsi), %r12, %r11
-	adcx	%rbp, %r12
-	lea	-2*8(%rsi), %rsi
-	lea	-2*8(%rdi), %rdi
-	jmp	.Lam7
-
-.Lp5:	mulx	0*8(%rsi), %r12, %r11
-	adcx	%rbp, %r12
-	lea	4*8(%rsi), %rsi
-	lea	-4*8(%rdi), %rdi
-	.align	32, 0x90
-.Lam5:	mulx	-3*8(%rsi), %rbx, %rbp
-	adcx	%r11, %rbx
-	adox	4*8(%rdi), %r12
-	mov	%r12, 4*8(%rdi)
-.Lam4:	mulx	-2*8(%rsi), %r12, %r11
-	adox	5*8(%rdi), %rbx
-	adcx	%rbp, %r12
-	mov	%rbx, 5*8(%rdi)
-.Lam3:	adox	6*8(%rdi), %r12
-	mulx	-1*8(%rsi), %rbx, %rbp
-	mov	%r12, 6*8(%rdi)
-	lea	8*8(%rdi), %rdi
-	adcx	%r11, %rbx
-.Lam2:	mulx	0*8(%rsi), %r12, %r11
-	adox	-1*8(%rdi), %rbx
-	adcx	%rbp, %r12
-	mov	%rbx, -1*8(%rdi)
-	jrcxz	.Lend
-.Lam1:	mulx	1*8(%rsi), %rbx, %rbp
-	adox	0*8(%rdi), %r12
-	lea	-1(%rcx), %rcx
-	mov	%r12, 0*8(%rdi)
-	adcx	%r11, %rbx
-.Lam0:	mulx	2*8(%rsi), %r12, %r11
-	adcx	%rbp, %r12
-	adox	1*8(%rdi), %rbx
-	mov	%rbx, 1*8(%rdi)
-.Lam7:	mulx	3*8(%rsi), %rbx, %rbp
-	lea	8*8(%rsi), %rsi
-	adcx	%r11, %rbx
-	adox	2*8(%rdi), %r12
-	mov	%r12, 2*8(%rdi)
-.Lam6:	mulx	-4*8(%rsi), %r12, %r11
-	adox	3*8(%rdi), %rbx
-	adcx	%rbp, %r12
-	mov	%rbx, 3*8(%rdi)
-	jmp	.Lam5
-
-.Lend:	adox	0*8(%rdi), %r12
-	adcx	%rcx, %r11
-	adox	%rcx, %r11
-	lea	1(%r10), %rcx
-	neg	%r10
-	lea	1*8(%r8), %r8
-	mov	%r12, 0*8(%rdi)
-	mov	%r11, 1*8(%rdi)
-	lea	1*8(%rdi,%r10,8), %rdi
-	lea	(%rsi,%r10,8), %rsi
-	neg	%r10
-	cmp	%r9, %rcx
-	lea	1(%r10), %r10
-	jb	.Lloop
-	ja	.Lexit
-	mov	0*8(%r8), %rdx
-	xor	%ebp, %ebp
-	jmp	.Lfin
-
-.Lexit:	pop	%r12
+L(ex):	pop	%r13
+	pop	%r12
 	pop	%rbp
 	pop	%rbx
 
