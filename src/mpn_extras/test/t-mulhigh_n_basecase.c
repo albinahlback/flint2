@@ -14,8 +14,8 @@
 
 #if FLINT_HAVE_MPN_MULHIGH_N_BASECASE
 
-#define N_MIN 5
-#define N_MAX 6
+#define N_MIN 7
+#define N_MAX 7
 /* #define N_MAX 12 */
 
 TEST_FUNCTION_START(flint_mpn_mulhigh_n_basecase, state)
@@ -38,8 +38,6 @@ TEST_FUNCTION_START(flint_mpn_mulhigh_n_basecase, state)
 
         rp1[0] = flint_mpn_mulhigh_n(rp1 + 1, xp, yp, n);
         rp2[0] = flint_mpn_mulhigh_n_basecase(rp2 + 1, xp, yp, n);
-
-        flint_printf("ix = %ld\nn = %ld\n", ix, n);
 
         result = (rp1[0] == rp2[0]);
         if (!result)
