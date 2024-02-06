@@ -62,15 +62,6 @@ define(`r2',	   `%rbp')
 define(`r3',	   `%r12')
 
 # Idea: Do similar to mpn_mullo_basecase for Skylake.
-#
-# Have premultiplications into a loop, just like mpn_mul_basecase, but increase
-# "m % 8" while in there via some address to jump to (`jmptab'). For the case
-# when m % 8 == 0, then we simply increase "m / 8" by one.
-#
-# We do as many precomputations as we can afford to without taking more
-# registers.
-#
-# But how do we exit the loop?
 
 .text
 
