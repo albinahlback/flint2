@@ -196,6 +196,8 @@ L(f1):	mulx	-1*8(ap), r0, r1
 	mulx	0*8(ap), r2, r3
 	adox	r0, rx
 	adcx	r1, r2
+	lea	1(nn), nn
+	lea	1(n), n
 	lea	L(f2)(%rip), jmpreg
 	jmp	L(b1)
 
@@ -302,7 +304,6 @@ L(f3):	mulx	-1*8(ap), r0, r1
 	mulx	0*8(ap), r2, r3
 	adox	r0, rx
 	adcx	r1, r2
-	lea	1(nn), nn
 	lea	2*8(ap), ap
 	lea	-6*8(rp), rp
 	lea	L(f4)(%rip), jmpreg
