@@ -14,8 +14,8 @@
 
 #if FLINT_HAVE_MPN_MULHIGH_N_BASECASE
 
-#define N_MIN 7
-#define N_MAX 7
+#define N_MIN 6
+#define N_MAX 10
 /* #define N_MAX 12 */
 
 TEST_FUNCTION_START(flint_mpn_mulhigh_n_basecase, state)

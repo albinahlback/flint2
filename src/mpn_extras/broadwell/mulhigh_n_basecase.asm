@@ -41,6 +41,7 @@ dnl   (at your option) any later version.  See <https://www.gnu.org/licenses/>.
 dnl
 
 include(`config.m4')
+include(`src/mpn_extras/broadwell/asm-defs.m4')
 
 define(`rp',	   `%rdi')
 define(`ap',	   `%rsi')
@@ -98,7 +99,7 @@ define(`s0', `jmpreg')
 define(`s1', `m')
 define(`s2', `mm')
 define(`s3', `nn')
-L(tr):	mov	0*8(bp), %rdx
+	mov	0*8(bp), %rdx
 	xor	R32(s3), R32(s3)
 	mulx	-1*8(ap), rx, rx
 	mulx	0*8(ap), s0, r0
@@ -168,11 +169,12 @@ undefine(`s3')
 	xor	R32(n), R32(n)		# n <- 0
 	mov	$-4*8, m		# m <- -8 * 4
 	mov	0*8(bp), %rdx
-	# jmp	L(f4)
-
-L(f4):	mulx	-2*8(ap), r1, r1
+	mulx	-2*8(ap), r1, r1
 	adcx	r1, rx
-L(e4):	mulx	-1*8(ap), r2, r3
+
+	# FIXME (n = 10):
+	# 4, 5, 6, 7, 0 (8), 1 (9)
+L(f4):	mulx	-1*8(ap), r2, r3
 	mulx	0*8(ap), r0, r1
 	adox	r2, rx
 	adcx	r3, r0
@@ -181,9 +183,7 @@ L(e4):	mulx	-1*8(ap), r2, r3
 	lea	L(f5)(%rip), jmpreg
 	jmp	L(b4)
 
-L(f0):	mulx	-2*8(ap), r1, r1
-	adcx	r1, rx
-L(e0):	mulx	-1*8(ap), r2, r3
+L(f0):	mulx	-1*8(ap), r2, r3
 	mulx	0*8(ap), r0, r1
 	adox	r2, rx
 	adcx	r3, r0
@@ -192,19 +192,14 @@ L(e0):	mulx	-1*8(ap), r2, r3
 	lea	L(f1)(%rip), jmpreg
 	jmp	L(b0)
 
-L(f1):	mulx	-2*8(ap), r3, r3
-	adcx	r3, rx
-L(e1):	mulx	-1*8(ap), r0, r1
+L(f1):	mulx	-1*8(ap), r0, r1
 	mulx	0*8(ap), r2, r3
 	adox	r0, rx
 	adcx	r1, r2
-	lea	-1(nn), R32(nn)
 	lea	L(f2)(%rip), jmpreg
 	jmp	L(b1)
 
-L(f7):	mulx	-2*8(ap), r3, r3
-	adcx	r3, rx
-L(e7):	mulx	-1*8(ap), r0, r1
+L(f7):	mulx	-1*8(ap), r0, r1
 	mulx	0*8(ap), r2, r3
 	adox	r0, rx
 	adcx	r1, r2
@@ -213,9 +208,7 @@ L(e7):	mulx	-1*8(ap), r0, r1
 	lea	L(f0)(%rip), jmpreg
 	jmp	L(b7)
 
-L(f2):	mulx	-2*8(ap), r1, r1
-	adcx	r1, rx
-L(e2):	mulx	-1*8(ap), r2, r3
+L(f2):	mulx	-1*8(ap), r2, r3
 	mulx	0*8(ap), r0, r1
 	adox	r2, rx
 	adcx	r3, r0
@@ -226,31 +219,27 @@ L(e2):	mulx	-1*8(ap), r2, r3
 	jmp	L(b2)
 
 L(end):	adox	0*8(rp), r2
+	mov	r2, 0*8(rp)
 	adox	n, r3		# n = 0
 	adc	n, r3		# n = 0
-	mov	r2, 0*8(rp)
 	mov	r3, 1*8(rp)
+	lea	(ap,m), ap	# Reset ap
 	lea	-1*8(m), m
 	lea	1*8(bp), bp	# Increase bp
-	lea	(ap,m), ap	# Reset ap
-	lea	1*8(rp,m), rp	# Reset rp
+	lea	2*8(rp,m), rp	# Reset rp
 	mov	0*8(bp), %rdx	# Load bp
-	cmp	L(f4)(%rip), jmpreg
-	jne	L(cmp)
-	inc	nn		# Increase nn FIXME Can be problematic
-L(cmp):	cmp	m, mm
-	# If |m| < |mm|: goto jmpreg
+	cmp	R32(m), R32(mm)
 	jge	L(jmp)
+	# If |m| < |mm|: goto jmpreg, but first do high part
 	or	R32(nn), R32(n)	# Reset n, CF and OF
+	mulx	-2*8(ap), r1, r1
+	adcx	r1, rx
 	jmp	*jmpreg
 	# If |m| > |mm|: goto fin
 L(jmp):	jg	L(fin)
-	# If |m| = |mm|: goto jmpreg + sizeof(mulx) + sizeof(adcx)
-	lea	12(jmpreg), jmpreg # HACK
-	lea	1*8(mm), mm
+	# If |m| = |mm|: goto jmpreg
 	or	R32(nn), R32(n)	# Reset n, clear CF and OF
 	jmp	*jmpreg
-	# jmp	L(fin)	# FIXME Remove me
 
 	ALIGN(32)
 L(b2):	adox	-1*8(rp), r0
@@ -291,9 +280,7 @@ L(b3):	adox	6*8(rp), r2
 	mulx	0*8(ap), r2, r3
 	jmp	L(b2)
 
-L(f6):	mulx	-2*8(ap), r1, r1
-	adcx	r1, rx
-L(e6):	mulx	-1*8(ap), r2, r3
+L(f6):	mulx	-1*8(ap), r2, r3
 	mulx	0*8(ap), r0, r1
 	adox	r2, rx
 	adcx	r3, r0
@@ -302,9 +289,7 @@ L(e6):	mulx	-1*8(ap), r2, r3
 	lea	L(f7)(%rip), jmpreg
 	jmp	L(b6)
 
-L(f5):	mulx	-2*8(ap), r3, r3
-	adcx	r3, rx
-L(e5):	mulx	-1*8(ap), r0, r1
+L(f5):	mulx	-1*8(ap), r0, r1
 	mulx	0*8(ap), r2, r3
 	adox	r0, rx
 	adcx	r1, r2
@@ -313,12 +298,11 @@ L(e5):	mulx	-1*8(ap), r0, r1
 	lea	L(f6)(%rip), jmpreg
 	jmp	L(b5)
 
-L(f3):	mulx	-2*8(ap), r3, r3
-	adcx	r3, rx
-L(e3):	mulx	-1*8(ap), r0, r1
+L(f3):	mulx	-1*8(ap), r0, r1
 	mulx	0*8(ap), r2, r3
 	adox	r0, rx
 	adcx	r1, r2
+	lea	1(nn), nn
 	lea	2*8(ap), ap
 	lea	-6*8(rp), rp
 	lea	L(f4)(%rip), jmpreg
