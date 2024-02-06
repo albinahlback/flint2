@@ -172,8 +172,6 @@ undefine(`s3')
 	mulx	-2*8(ap), r1, r1
 	adcx	r1, rx
 
-	# FIXME (n = 10):
-	# 4, 5, 6, 7, 0 (8), 1 (9)
 L(f4):	mulx	-1*8(ap), r2, r3
 	mulx	0*8(ap), r0, r1
 	adox	r2, rx
