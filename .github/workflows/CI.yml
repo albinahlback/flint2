@@ -32,10 +32,8 @@ jobs:
           cd gmp
           cp mpn/x86_64/coreihwl/sqr_basecase.asm mpn/x86_64/coreisbr/sqr_basecase.asm
           sed -i '' '/(RM_TMP) tmp/d' mpn/Makeasm.am
-          ./.bootstrap
           ./configure \
             CC=$(brew --prefix llvm@15)/bin/clang \
             --disable-static
           $MAKE
-          cat mpn/tmp-sqr_basecase.s
           cat mpn/tmp-sqr_basecase.s
