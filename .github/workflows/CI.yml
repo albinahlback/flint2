@@ -29,11 +29,14 @@ jobs:
       - name: "Bla"
         run: |
           git clone --depth=1 https://github.com/alisw/GMP.git
-          cd gmp
+          cd GMP
           cp mpn/x86_64/coreihwl/sqr_basecase.asm mpn/x86_64/coreisbr/sqr_basecase.asm
           sed -i '' '/(RM_TMP) tmp/d' mpn/Makeasm.am
           ./configure \
             CC=$(brew --prefix llvm@15)/bin/clang \
             --disable-static
           $MAKE
+          ls
+          ls mpn/
+          cat tmp-sqr_basecase.s
           cat mpn/tmp-sqr_basecase.s
