@@ -1,11 +1,6 @@
 name: CI
 
-on:
-  pull_request:
-  push:
-    branches:
-      - main
-      - flint-*
+on: [push, pull_request]
 
 jobs:
   ##############################################################################
