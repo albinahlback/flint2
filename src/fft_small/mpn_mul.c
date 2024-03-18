@@ -14,6 +14,7 @@
 #include "thread_pool.h"
 #include "thread_support.h"
 #include "nmod.h"
+#include "mpn_extras.h"
 #include "crt_helpers.h"
 #include "fft_small.h"
 
@@ -1623,16 +1624,18 @@ timeit_start(timer);
             ulong start = w[i].start_easy*P.bits/64;
             if (i == P.nhandles)
             {
-                cf = flint_mpn_add_inplace_c(z + start, zn - start,
-                                              w[i - 1].overhang_buffer, n, cf);
+                cf = mpn_add_nc(z + start, z + start, w[i - 1].overhang_buffer, n, cf);
+                if ((zn - start - n) > 0)
+                    cf = mpn_add_1(z + start + n, z + start + n, zn - start - n, cf);
             }
             else
             {
                 ulong stop = w[i].stop_easy*P.bits/64;
                 if (stop > start)
                 {
-                    cf = flint_mpn_add_inplace_c(z + start, stop - start,
-                                              w[i - 1].overhang_buffer, n, cf);
+                    cf = mpn_add_nc(z + start, z + start, w[i - 1].overhang_buffer, n, cf);
+                    if ((stop - start - n) > 0)
+                        cf = mpn_add_1(z + start + n, z + start + n, zn - start - n, cf);
                 }
                 else
                 {

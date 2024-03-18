@@ -432,7 +432,6 @@ typedef mpn_ctx_struct mpn_ctx_t[1];
 void _convert_block(ulong* Xs, sd_fft_ctx_struct* Rffts, double* d, ulong dstride, ulong np, ulong I);
 ulong flint_mpn_nbits(const ulong* a, ulong an);
 int flint_mpn_cmp_ui_2exp(const ulong* a, ulong an, ulong b, ulong e);
-unsigned char flint_mpn_add_inplace_c(ulong* z, ulong zn, ulong* a, ulong an, unsigned char cf);
 
 
 void mpn_ctx_init(mpn_ctx_t R, ulong p);

@@ -111,23 +111,3 @@ int flint_mpn_cmp_ui_2exp(const ulong* a, ulong an, ulong b, ulong e)
 
     return 0;
 }
-
-
-unsigned char flint_mpn_add_inplace_c(ulong* z, ulong zn, ulong* a, ulong an, unsigned char cf)
-{
-    FLINT_ASSERT(zn >= an);
-    FLINT_ASSERT(an > 0);
-
-    ulong i = 0;
-    do {
-        cf = _addcarry_ulong(cf, z[i], a[i], &z[i]);
-    } while (i++, i < an);
-
-    while (i < zn && cf != 0)
-    {
-        cf = _addcarry_ulong(cf, z[i], 0, &z[i]);
-        i++;
-    }
-
-    return cf;
-}
