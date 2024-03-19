@@ -93,6 +93,7 @@ Integers
    arith.rst
    fft.rst
    fft_small.rst
+   crt_helpers.rst
    qsieve.rst
 
 
