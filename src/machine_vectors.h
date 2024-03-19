@@ -18,13 +18,13 @@
 #include <math.h>
 
 #if defined(__GNUC__)
-# if defined(__AVX2__)
+# if defined(__AVX2__) || defined(__AVX512F__)
 #  include <immintrin.h>
 # elif defined(__ARM_NEON)
 #  include <arm_neon.h>
 # endif
 #elif defined(_MSC_VER)
-# if defined(__AVX2__)
+# if defined(__AVX2__) || defined(__AVX512F__)
 #  include <intrin.h>
 # elif defined(_M_ARM64)
 #  include <arm_neon.h>
@@ -38,7 +38,7 @@
 extern "C" {
 #endif
 
-#if defined(__AVX2__)
+#if defined(__AVX2__) && !defined(__AVX512F__)
 /*
     In general the machine vector types should either be passed by const ref or
     the whole function should be forced inline as some platforms have buggy
@@ -779,7 +779,135 @@ FLINT_FORCE_INLINE vec8n vec8n_bit_and(vec8n a, vec8n b) {
     return z;
 }
 
+#elif defined(__AVX512F__)
 
+typedef __m512i vec8n;
+typedef __m512d vec8d;
+
+/* load and store ************************************************************/
+
+FLINT_FORCE_INLINE
+void vec8n_store_unaligned(ulong * rp, vec8n xn)
+{
+    _mm512_storeu_epi64(rp, xn);
+}
+
+FLINT_FORCE_INLINE
+vec8n vec8n_load_unaligned(ulong * rp)
+{
+    return _mm512_loadu_epi64(rp);
+}
+
+/* manipulation **************************************************************/
+
+FLINT_FORCE_INLINE
+double vec8d_get_index(vec8d xd, const slong ix)
+{
+    return xd[ix];
+}
+
+FLINT_FORCE_INLINE
+vec8d vec8d_set_d(double d)
+{
+    return _mm512_set1_pd(d);
+}
+
+FLINT_FORCE_INLINE
+vec8d vec8d_set_d8(double d0, double d1, double d2, double d3, double d4, double d5, double d6, double d7)
+{
+    return _mm512_set_pd(d7, d6, d5, d4, d3, d2, d1, d0);
+}
+
+FLINT_FORCE_INLINE
+vec8d vec8d_one(void)
+{
+    return vec8d_set_d(1);
+}
+
+/* arithmetic ****************************************************************/
+
+FLINT_FORCE_INLINE
+vec8d vec8d_round(vec8d xd)
+{
+    return _mm512_roundscale_pd(xd, _MM_FROUND_CUR_DIRECTION);
+}
+
+FLINT_FORCE_INLINE
+vec8d vec8d_add(vec8d xd, vec8d yd)
+{
+    return _mm512_add_pd(a, b);
+}
+
+FLINT_FORCE_INLINE
+vec8d vec8d_sub(vec8d xd, vec8d yd)
+{
+    return _mm512_sub_pd(xd, yd);
+}
+
+FLINT_FORCE_INLINE
+vec8d vec8d_mul(vec8d xd, vec8d yd)
+{
+    return _mm512_mul_pd(xd, yd);
+}
+
+FLINT_FORCE_INLINE
+vec8d vec8d_fnmadd(vec8d xd, vec8d yd, vec8d zd)
+{
+    return _mm512_fnmadd_pd(xd, yd, zd);
+}
+
+FLINT_FORCE_INLINE
+vec8d vec8d_fmsub(vec8d xd, vec8d yd, vec8d zd)
+{
+    return _mm512_fmsub_pd(xd, yd, zd);
+}
+
+#if 0
+/* FIXME: Could this be useful? */
+FLINT_FORCE_INLINE
+vec8d vec8d_fnmadd_round(vec8d xd, vec8d yd, vec8d zd)
+{
+    return _mm512_fnmadd_round_pd(xd, yd, zd, _MM_FROUND_CUR_DIRECTION);
+}
+#endif
+
+/* blend, pack and unpack ****************************************************/
+
+FLINT_FORCE_INLINE
+vec8d vec8d_blendv(vec8d xd, vec8d yd, vec8d zd)
+{
+    return _mm256_blendv_pd(xd, yd, zd);
+}
+
+/* modulo / reduction ****************************************************/
+
+#if 1
+/* NOTE: Do not use these directly. */
+
+FLINT_FORCE_INLINE
+vec8d vec8d_reduce_to_pm1n(vec8d xd, vec8d nd, vec8d ninvd)
+{
+    return vec8d_fnmadd(vec8d_round(vec8d_mul(xd, ninvd)), nd, ad);
+}
+
+FLINT_FORCE_INLINE
+vec8d vec8d_mulmod(vec8d ad, vec8d bd, vec8d nd, vec8d ninvd)
+{
+    vec8d hd = vec8d_mul(ad, bd);
+    vec8d qd = vec8d_round(vec8d_mul(hd, ninvd));
+    vec8d ld = vec8d_fmsub(ad, bd, hd);
+    return vec8d_add(vec8d_fnmadd(qd, nd, hd), ld);
+}
+
+FLINT_FORCE_INLINE
+vec8d vec8d_nmulmod(vec8d ad, vec8d bd, vec8d nd, vec8d ninvd)
+{
+    vec8d hd = vec8d_mul(ad, bd);
+    vec8d qd = vec8d_round(vec8d_mul(hd, ninvd));
+    vec8d ld = vec8d_fnmadd(ad, bd, hd);
+    return vec8d_sub(ld, vec8d_fnmadd(qd, nd, hd));
+}
+#endif
 
 #elif defined(__ARM_NEON) || defined(_M_ARM64)
 
