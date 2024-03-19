@@ -781,6 +781,9 @@ FLINT_FORCE_INLINE vec8n vec8n_bit_and(vec8n a, vec8n b) {
 
 #elif defined(__AVX512F__)
 
+/* TODO: Remove the following two. */
+typedef __m256i vec4n;
+typedef __m256d vec4d;
 typedef __m512i vec8n;
 typedef __m512d vec8d;
 
@@ -796,6 +799,24 @@ FLINT_FORCE_INLINE
 vec8n vec8n_load_unaligned(ulong * rp)
 {
     return _mm512_loadu_epi64(rp);
+}
+
+FLINT_FORCE_INLINE
+void vec8d_store_unaligned(double * rp, vec8d xd)
+{
+    _mm512_storeu_pd(rp, xd);
+}
+
+FLINT_FORCE_INLINE
+vec8d vec8d_load_unaligned(double * rp)
+{
+    return _mm512_loadu_pd(rp);
+}
+
+FLINT_FORCE_INLINE
+vec8d vec8d_load_aligned(double * rp)
+{
+    return _mm512_load_pd(rp);
 }
 
 /* manipulation **************************************************************/
@@ -829,19 +850,25 @@ vec8d vec8d_one(void)
 FLINT_FORCE_INLINE
 vec8d vec8d_round(vec8d xd)
 {
-    return _mm512_roundscale_pd(xd, _MM_FROUND_CUR_DIRECTION);
+    return _mm512_roundscale_pd(xd, _MM_FROUND_TO_ZERO);
 }
 
 FLINT_FORCE_INLINE
 vec8d vec8d_add(vec8d xd, vec8d yd)
 {
-    return _mm512_add_pd(a, b);
+    return _mm512_add_pd(xd, yd);
 }
 
 FLINT_FORCE_INLINE
 vec8d vec8d_sub(vec8d xd, vec8d yd)
 {
     return _mm512_sub_pd(xd, yd);
+}
+
+FLINT_FORCE_INLINE
+vec8d vec8d_abs(vec8d xd)
+{
+    return _mm512_abs_pd(xd);
 }
 
 FLINT_FORCE_INLINE
@@ -867,21 +894,31 @@ vec8d vec8d_fmsub(vec8d xd, vec8d yd, vec8d zd)
 FLINT_FORCE_INLINE
 vec8d vec8d_fnmadd_round(vec8d xd, vec8d yd, vec8d zd)
 {
-    return _mm512_fnmadd_round_pd(xd, yd, zd, _MM_FROUND_CUR_DIRECTION);
+    return _mm512_fnmadd_round_pd(xd, yd, zd, (_MM_FROUND_TO_ZERO |_MM_FROUND_NO_EXC));
 }
 #endif
 
+/* conversion ****************************************************************/
+
+FLINT_FORCE_INLINE
+vec8n vec8d_convert_limited_vec8n(vec8d xd)
+{
+    return _mm512_cvt_roundpd_epu64(xd, (_MM_FROUND_TO_ZERO |_MM_FROUND_NO_EXC));
+}
+
 /* blend, pack and unpack ****************************************************/
 
+#if 0
 FLINT_FORCE_INLINE
 vec8d vec8d_blendv(vec8d xd, vec8d yd, vec8d zd)
 {
     return _mm256_blendv_pd(xd, yd, zd);
 }
+#endif
 
 /* modulo / reduction ****************************************************/
 
-#if 1
+#if 0
 /* NOTE: Do not use these directly. */
 
 FLINT_FORCE_INLINE
