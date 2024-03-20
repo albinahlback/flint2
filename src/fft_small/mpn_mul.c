@@ -711,6 +711,7 @@ static void CAT(_mpn_from_ffts, NP)( \
             ulong t[N + 1]; \
             ulong l = 0; \
  \
+            /* TODO: Implement _big_mul_full_M_N for faster evaluation */ \
             CAT3(_big_mul, N, M)(r, t, _crt_data_co_prime(Rcrts + np - 1, l, n), Xs[l*BLK_SZ + j]); \
             for (l++; l < np; l++) \
                 CAT3(_big_addmul, N, M)(r, t, _crt_data_co_prime(Rcrts + np - 1, l, n), Xs[l*BLK_SZ + j]); \
@@ -765,6 +766,7 @@ static void CAT(_mpn_from_ffts, NP)( \
                 } \
                 /* add zn_stop - toff words to the answer */ \
                 /* and n + 1 + toff - zn_stop words to the overhang */ \
+                /* FIXME: Replace with mpn_add_n and mpn_add_nc */ \
                 unsigned char cf = 0; \
                 ulong k = 0; \
                 for (; k < zn_stop - toff; k++) \
@@ -776,7 +778,8 @@ static void CAT(_mpn_from_ffts, NP)( \
     } \
     else \
     { \
-        for (ulong i = stop_easy; i < zlen; i++) \
+        ulong i; \
+        for (i = stop_easy; i < zlen; i++) \
         { \
             ulong r[N + 1]; \
             ulong t[N + 1]; \
@@ -784,6 +787,10 @@ static void CAT(_mpn_from_ffts, NP)( \
             double xx = sd_fft_ctx_get_index(d + l*dstride, i); \
             ulong x = vec1d_reduce_to_0n(xx, Rffts[l].p, Rffts[l].pinv); \
  \
+            /* TODO: Move reduction of x out, and parse, say, 16 iterations over
+             * major for-loop. With around 400 limbs, we seem iterate around 180
+             * times, so parsing 16 * NP >= 16 * 4 = 64 at a time is feasible,
+             * even if that means that we calculate a little bit too much. */ \
             CAT3(_big_mul, N, M)(r, t, crt_data_co_prime(Rcrts + np - 1, l), x); \
             for (l++; l < np; l++) \
             { \

@@ -645,7 +645,7 @@ DEFINE_IT(7, 6)
 
 
 #define DEFINE_IT(n, n_minus_1) \
-FLINT_FORCE_INLINE void CAT(_reduce_big_sum, n)(ulong r[], ulong t[], const ulong* limit) \
+FLINT_FORCE_INLINE void CAT(_reduce_big_sum, n)(ulong r[], const ulong t[], const ulong* limit) \
 { \
     CAT(multi_add, n_minus_1)(r+1, t+1); \
 check: \
