@@ -84,6 +84,7 @@ void _convert_block(
             x6 = vec8d_fnmadd(t6, p, x6);
             x7 = vec8d_fnmadd(t7, p, x7);
 
+            /* FIXME: This is wrong */
             /* x_{i} -> |x_{i}|, so x_{i} in [0, p) */
             x0 = vec8d_abs(x0);
             x1 = vec8d_abs(x1);

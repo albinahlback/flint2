@@ -32,7 +32,6 @@ void crt_data_clear(crt_data_t C)
 }
 
 
-
 /*
     need  ceil(64*bn/bits) <= prod_primes/2^(2*bits)
     i.e.  (64*bn+bits-1)/bits <= prod_primes/2^(2*bits)
@@ -629,6 +628,120 @@ typedef void (*from_ffts_func)(
     ulong start_easy, ulong stop_easy,
     ulong* overhang);
 
+/* INIT_P_PINV_NP
+
+   Sets p0, pinv0 and possibly p1, pinv1 (depending on instruction set). */
+
+/* get_reduced_NP(xp, dp, dstride, ix, p0, pinv0(, p1, pinv1))
+
+   Takes (16 * NP) inputs in dp according to dstride and ix, and reduces it
+   according to the remainder when dividing by pN, and then converts it to
+   ulongs and pushes it to xp. */
+
+#define RED_UNROLL 16
+#define GET_IDX(dp, l, dstride, ix) sd_fft_ctx_get_index(dp + l * dstride, ix)
+
+#if !defined(__AVX512F__)
+# define INIT_P_PINV_4 \
+    vec4d p0, pinv0; \
+    p0 = vec4d_set_d4(Rffts[0].p, Rffts[1].p, Rffts[2].p, Rffts[3].p); \
+    pinv0 = vec4d_set_d4(Rffts[0].pinv, Rffts[1].pinv, Rffts[2].pinv, Rffts[3].pinv)
+
+FLINT_FORCE_INLINE
+void get_reduced_4(ulong * xp, double * dp, ulong dstride,
+                   ulong ix, vec4d p, vec4d pinv)
+{
+    vec4d d0, d1, d2, d3;
+    vec4d t0, t1, t2, t3;
+
+    d0 = vec4d_set_d4(GET_IDX(dp, 0, dstride, ix + 0),
+                      GET_IDX(dp, 1, dstride, ix + 0),
+                      GET_IDX(dp, 2, dstride, ix + 0),
+                      GET_IDX(dp, 3, dstride, ix + 0));
+    d1 = vec4d_set_d4(GET_IDX(dp, 0, dstride, ix + 1),
+                      GET_IDX(dp, 1, dstride, ix + 1),
+                      GET_IDX(dp, 2, dstride, ix + 1),
+                      GET_IDX(dp, 3, dstride, ix + 1));
+    d2 = vec4d_set_d4(GET_IDX(dp, 0, dstride, ix + 2),
+                      GET_IDX(dp, 1, dstride, ix + 2),
+                      GET_IDX(dp, 2, dstride, ix + 2),
+                      GET_IDX(dp, 3, dstride, ix + 2));
+    d3 = vec4d_set_d4(GET_IDX(dp, 0, dstride, ix + 3),
+                      GET_IDX(dp, 1, dstride, ix + 3),
+                      GET_IDX(dp, 2, dstride, ix + 3),
+                      GET_IDX(dp, 3, dstride, ix + 3));
+
+    t0 = vec4d_mul(d0, pinv);
+    t1 = vec4d_mul(d1, pinv);
+    t2 = vec4d_mul(d2, pinv);
+    t3 = vec4d_mul(d3, pinv);
+
+    t0 = vec4d_round(t0);
+    t1 = vec4d_round(t1);
+    t2 = vec4d_round(t2);
+    t3 = vec4d_round(t3);
+
+    d0 = vec4d_fnmadd(t0, p, d0);
+    d1 = vec4d_fnmadd(t1, p, d0);
+    d2 = vec4d_fnmadd(t2, p, d0);
+    d3 = vec4d_fnmadd(t3, p, d0);
+
+    vec4d_blendv(a, vec4d_add(a, n), a)
+    /* for i */
+    /* 0 <= l < NP */
+    double xx = sd_fft_ctx_get_index(dp + l * dstride, i);
+    ulong x = vec1d_reduce_to_0n(xx, Rffts[l].p, Rffts[l].pinv);
+}
+
+# define GET_REDUCED_4(xp, dp, dstride, ix) get_reduced_4(xp, dp, dstride, ix, p0, pinv0)
+
+# define INIT_P_PINV_5 \
+    vec4d p0, p1, pinv0, pinv1; \
+    p0 = vec4d_set_d4(Rffts[0].p, Rffts[1].p, Rffts[2].p, Rffts[3].p); \
+    p1 = vec4d_set_d4(Rffts[4].p, Rffts[4].p, Rffts[4].p, Rffts[4].p); \
+    pinv0 = vec4d_set_d4(Rffts[0].pinv, Rffts[1].pinv, Rffts[2].pinv, Rffts[3].pinv); \
+    pinv1 = vec4d_set_d4(Rffts[4].pinv, Rffts[4].pinv, Rffts[4].pinv, Rffts[4].pinv)
+# define INIT_P_PINV_6 \
+    vec4d p0, p1, pinv0, pinv1; \
+    p0 = vec4d_set_d4(Rffts[0].p, Rffts[1].p, Rffts[2].p, Rffts[3].p); \
+    p1 = vec4d_set_d4(Rffts[4].p, Rffts[5].p, Rffts[5].p, Rffts[5].p); \
+    pinv0 = vec4d_set_d4(Rffts[0].pinv, Rffts[1].pinv, Rffts[2].pinv, Rffts[3].pinv); \
+    pinv1 = vec4d_set_d4(Rffts[4].pinv, Rffts[5].pinv, Rffts[5].pinv, Rffts[5].pinv)
+# define INIT_P_PINV_7 \
+    vec4d p0, p1, pinv0, pinv1; \
+    p0 = vec4d_set_d4(Rffts[0].p, Rffts[1].p, Rffts[2].p, Rffts[3].p); \
+    p1 = vec4d_set_d4(Rffts[4].p, Rffts[5].p, Rffts[6].p, Rffts[6].p); \
+    pinv0 = vec4d_set_d4(Rffts[0].pinv, Rffts[1].pinv, Rffts[2].pinv, Rffts[3].pinv); \
+    pinv1 = vec4d_set_d4(Rffts[4].pinv, Rffts[5].pinv, Rffts[6].pinv, Rffts[6].pinv)
+# define INIT_P_PINV_8 \
+    vec4d p0, p1, pinv0, pinv1; \
+    p0 = vec4d_set_d4(Rffts[0].p, Rffts[1].p, Rffts[2].p, Rffts[3].p); \
+    p1 = vec4d_set_d4(Rffts[4].p, Rffts[5].p, Rffts[6].p, Rffts[7].p); \
+    pinv0 = vec4d_set_d4(Rffts[0].pinv, Rffts[1].pinv, Rffts[2].pinv, Rffts[3].pinv); \
+    pinv1 = vec4d_set_d4(Rffts[4].pinv, Rffts[5].pinv, Rffts[6].pinv, Rffts[7].pinv)
+#else
+# define INIT_P_PINV_4 \
+    vec4d p0, pinv0; \
+    p0 = vec4d_set_d4(Rffts[0].p, Rffts[1].p, Rffts[2].p, Rffts[3].p); \
+    pinv0 = vec4d_set_d4(Rffts[0].pinv, Rffts[1].pinv, Rffts[2].pinv, Rffts[3].pinv)
+# define INIT_P_PINV_5 \
+    vec8d p0, pinv0; \
+    p0 = vec8d_set_d8(Rffts[0].p, Rffts[1].p, Rffts[2].p, Rffts[3].p, Rffts[4].p, Rffts[4].p, Rffts[4].p, Rffts[4].p); \
+    pinv0 = vec8d_set_d8(Rffts[0].pinv, Rffts[1].pinv, Rffts[2].pinv, Rffts[3].pinv, Rffts[4].pinv, Rffts[4].pinv, Rffts[4].pinv, Rffts[4].pinv)
+# define INIT_P_PINV_6 \
+    vec8d p0, pinv0; \
+    p0 = vec8d_set_d8(Rffts[0].p, Rffts[1].p, Rffts[2].p, Rffts[3].p, Rffts[4].p, Rffts[5].p, Rffts[5].p, Rffts[5].p); \
+    pinv0 = vec8d_set_d8(Rffts[0].pinv, Rffts[1].pinv, Rffts[2].pinv, Rffts[3].pinv, Rffts[4].pinv, Rffts[5].pinv, Rffts[5].pinv, Rffts[5].pinv)
+# define INIT_P_PINV_7 \
+    vec8d p0, pinv0; \
+    p0 = vec8d_set_d8(Rffts[0].p, Rffts[1].p, Rffts[2].p, Rffts[3].p, Rffts[4].p, Rffts[5].p, Rffts[6].p, Rffts[6].p); \
+    pinv0 = vec8d_set_d8(Rffts[0].pinv, Rffts[1].pinv, Rffts[2].pinv, Rffts[3].pinv, Rffts[4].pinv, Rffts[5].pinv, Rffts[6].pinv, Rffts[6].pinv)
+# define INIT_P_PINV_8 \
+    vec8d p0, pinv0; \
+    p0 = vec8d_set_d8(Rffts[0].p, Rffts[1].p, Rffts[2].p, Rffts[3].p, Rffts[4].p, Rffts[5].p, Rffts[6].p, Rffts[7].p); \
+    pinv0 = vec8d_set_d8(Rffts[0].pinv, Rffts[1].pinv, Rffts[2].pinv, Rffts[3].pinv, Rffts[4].pinv, Rffts[5].pinv, Rffts[6].pinv, Rffts[7].pinv)
+#endif
+
 /*
     The "n" here is the limb count Rcrts[np-1].coeff_len, which is big enough
     to hold (product of primes)*(number of primes), so it can hold the
@@ -779,25 +892,24 @@ static void CAT(_mpn_from_ffts, NP)( \
     else \
     { \
         ulong i; \
+        CAT(INIT_P_PINV, NP); \
+ \
         for (i = stop_easy; i < zlen; i++) \
         { \
             ulong r[N + 1]; \
             ulong t[N + 1]; \
+            ulong xp[NP]; \
             ulong l = 0; \
-            double xx = sd_fft_ctx_get_index(d + l*dstride, i); \
-            ulong x = vec1d_reduce_to_0n(xx, Rffts[l].p, Rffts[l].pinv); \
+ \
+            CAT(GET_REDUCED, NP)(xp, d, dstride, i); \
  \
             /* TODO: Move reduction of x out, and parse, say, 16 iterations over
              * major for-loop. With around 400 limbs, we seem iterate around 180
              * times, so parsing 16 * NP >= 16 * 4 = 64 at a time is feasible,
              * even if that means that we calculate a little bit too much. */ \
-            CAT3(_big_mul, N, M)(r, t, crt_data_co_prime(Rcrts + np - 1, l), x); \
+            CAT3(_big_mul, N, M)(r, t, crt_data_co_prime(Rcrts + np - 1, l), xp[l]); \
             for (l++; l < np; l++) \
-            { \
-                xx = sd_fft_ctx_get_index(d + l*dstride, i); \
-                x = vec1d_reduce_to_0n(xx, Rffts[l].p, Rffts[l].pinv); \
-                CAT3(_big_addmul, N, M)(r, t, crt_data_co_prime(Rcrts + np - 1, l), x); \
-            } \
+                CAT3(_big_addmul, N, M)(r, t, crt_data_co_prime(Rcrts + np - 1, l), xp[l]); \
  \
             CAT(_reduce_big_sum, N)(r, t, crt_data_prod_primes(Rcrts + np - 1)); \
  \
