@@ -988,14 +988,12 @@ void mpn_ctx_init(mpn_ctx_t R, ulong p)
 
     R->profiles_size = 0;
 
-/*flint_printf("\n");*/
 #define PUSH_PROFILE(np_, bits_, n, m) \
     i = R->profiles_size; \
     R->profiles[i].np        = np_; \
     R->profiles[i].bits      = bits_; \
     R->profiles[i].bn_bound  = crt_data_find_bn_bound(R->crts + np_ - 1, bits_); \
     R->profiles[i].to_ffts   = CAT3(mpn_to_ffts, np_, bits_); \
-/*flint_printf("profile np = %wu, bits = %3wu, bn <= 0x%16wx\n", R->profiles[i].np, R->profiles[i].bits, R->profiles[i].bn_bound);*/ \
     R->profiles_size = i + 1;
 
     PUSH_PROFILE(4, 84, 4,3);
