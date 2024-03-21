@@ -866,12 +866,6 @@ vec8d vec8d_sub(vec8d xd, vec8d yd)
 }
 
 FLINT_FORCE_INLINE
-vec8d vec8d_abs(vec8d xd)
-{
-    return _mm512_abs_pd(xd);
-}
-
-FLINT_FORCE_INLINE
 vec8d vec8d_mul(vec8d xd, vec8d yd)
 {
     return _mm512_mul_pd(xd, yd);
@@ -906,45 +900,19 @@ vec8n vec8d_convert_limited_vec8n(vec8d xd)
     return _mm512_cvt_roundpd_epu64(xd, (_MM_FROUND_TO_ZERO |_MM_FROUND_NO_EXC));
 }
 
-/* blend, pack and unpack ****************************************************/
-
-#if 0
-FLINT_FORCE_INLINE
-vec8d vec8d_blendv(vec8d xd, vec8d yd, vec8d zd)
-{
-    return _mm256_blendv_pd(xd, yd, zd);
-}
-#endif
-
-/* modulo / reduction ****************************************************/
-
-#if 0
-/* NOTE: Do not use these directly. */
+/* bit manipulation **********************************************************/
 
 FLINT_FORCE_INLINE
-vec8d vec8d_reduce_to_pm1n(vec8d xd, vec8d nd, vec8d ninvd)
+vec8d vec8d_and(vec8d xd, vec8d yd)
 {
-    return vec8d_fnmadd(vec8d_round(vec8d_mul(xd, ninvd)), nd, ad);
+    return _mm512_castpd_si512(_mm512_and_epi64(_mm512_castsi512_pd(xd), _mm512_castsi512_pd(yd)));
 }
 
 FLINT_FORCE_INLINE
-vec8d vec8d_mulmod(vec8d ad, vec8d bd, vec8d nd, vec8d ninvd)
+vec8d vec8d_sar(vec8d xi, const unsigned int cnt)
 {
-    vec8d hd = vec8d_mul(ad, bd);
-    vec8d qd = vec8d_round(vec8d_mul(hd, ninvd));
-    vec8d ld = vec8d_fmsub(ad, bd, hd);
-    return vec8d_add(vec8d_fnmadd(qd, nd, hd), ld);
+    return _mm512_castpd_si512(_mm512_srai_epi64(_mm512_castsi512_pd(xd), cnt));
 }
-
-FLINT_FORCE_INLINE
-vec8d vec8d_nmulmod(vec8d ad, vec8d bd, vec8d nd, vec8d ninvd)
-{
-    vec8d hd = vec8d_mul(ad, bd);
-    vec8d qd = vec8d_round(vec8d_mul(hd, ninvd));
-    vec8d ld = vec8d_fnmadd(ad, bd, hd);
-    return vec8d_sub(ld, vec8d_fnmadd(qd, nd, hd));
-}
-#endif
 
 #elif defined(__ARM_NEON) || defined(_M_ARM64)
 

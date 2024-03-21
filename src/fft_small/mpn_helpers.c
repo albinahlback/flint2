@@ -84,16 +84,33 @@ void _convert_block(
             x6 = vec8d_fnmadd(t6, p, x6);
             x7 = vec8d_fnmadd(t7, p, x7);
 
-            /* FIXME: This is wrong */
-            /* x_{i} -> |x_{i}|, so x_{i} in [0, p) */
-            x0 = vec8d_abs(x0);
-            x1 = vec8d_abs(x1);
-            x2 = vec8d_abs(x2);
-            x3 = vec8d_abs(x3);
-            x4 = vec8d_abs(x4);
-            x5 = vec8d_abs(x5);
-            x6 = vec8d_abs(x6);
-            x7 = vec8d_abs(x7);
+            /* Reduce x_{i} mod p in [0, p) */
+            t0 = vec8d_sar(x0, 63);
+            t1 = vec8d_sar(x1, 63);
+            t2 = vec8d_sar(x2, 63);
+            t3 = vec8d_sar(x3, 63);
+            t4 = vec8d_sar(x4, 63);
+            t5 = vec8d_sar(x5, 63);
+            t6 = vec8d_sar(x6, 63);
+            t7 = vec8d_sar(x7, 63);
+
+            t0 = vec8d_and(t0, p);
+            t1 = vec8d_and(t1, p);
+            t2 = vec8d_and(t2, p);
+            t3 = vec8d_and(t3, p);
+            t4 = vec8d_and(t4, p);
+            t5 = vec8d_and(t5, p);
+            t6 = vec8d_and(t6, p);
+            t7 = vec8d_and(t7, p);
+
+            x0 = vec8d_add(x0, t0);
+            x1 = vec8d_add(x1, t1);
+            x2 = vec8d_add(x2, t2);
+            x3 = vec8d_add(x3, t3);
+            x4 = vec8d_add(x4, t4);
+            x5 = vec8d_add(x5, t5);
+            x6 = vec8d_add(x6, t6);
+            x7 = vec8d_add(x7, t7);
 
             /* Convert from double to integer */
             y0 = vec8d_convert_limited_vec8n(x0);
