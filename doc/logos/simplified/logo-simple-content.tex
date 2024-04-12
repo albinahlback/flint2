@@ -1,0 +1,80 @@
+\useasboundingbox (-1.3,-1.4) rectangle (1.3,1.2);
+
+% Some radii
+\pgfmathsetmacro{\ra}{1.0}
+\pgfmathsetmacro{\rb}{0.9}
+\pgfmathsetmacro{\rc}{1.1}
+\pgfmathsetmacro{\rt}{0.73}
+\pgfmathsetmacro{\rtb}{0.71}
+\pgfmathsetmacro{\rtc}{0.85}
+\pgfmathsetmacro{\rd}{1.1}
+
+% XXX: these need to change with the global document scaling
+\pgfmathsetmacro{\rw}{12.05}
+\pgfmathsetmacro{\rwa}{2.0}
+\pgfmathsetmacro{\rwb}{0.8}
+\pgfmathsetmacro{\rwc}{2.35}
+
+\pgfmathsetmacro{\eps}{0.05}
+
+% Draw half circle with increasing redness
+\draw [domain = -30.8 + \eps : -25,          samples =  64, color = red!70!blue,      line width =  \rw] plot ({\rc * cos(\x)}, {\rc * sin(\x)});
+\draw [domain = -25   -  0.1 :   0,          samples =  64, color = red!80,           line width =  \rw] plot ({\rc * cos(\x)}, {\rc * sin(\x)});
+\draw [domain =   0   -  0.1 :  30,          samples =  64, color = red!20!orange,    line width =  \rw] plot ({\rc * cos(\x)}, {\rc * sin(\x)});
+\draw [domain =  30   -  0.1 :  60,          samples =  64, color = orange!80,        line width =  \rw] plot ({\rc * cos(\x)}, {\rc * sin(\x)});
+\draw [domain =  60   -  0.1 :  90,          samples =  64, color = orange!40!yellow, line width =  \rw] plot ({\rc * cos(\x)}, {\rc * sin(\x)});
+\draw [domain =  90   -  0.1 : 120,          samples =  64, color = orange!20!yellow, line width =  \rw] plot ({\rc * cos(\x)}, {\rc * sin(\x)});
+\draw [domain = 120   -  0.1 : 150,          samples =  64, color = yellow!70,        line width =  \rw] plot ({\rc * cos(\x)}, {\rc * sin(\x)});
+\draw [domain = 150   -  0.1 : 180,          samples =  64, color = yellow!40,        line width =  \rw] plot ({\rc * cos(\x)}, {\rc * sin(\x)});
+\draw [domain = 180   -  0.1 : 210.8 - \eps, samples =  64, color = yellow!10,        line width =  \rw] plot ({\rc * cos(\x)}, {\rc * sin(\x)});
+
+% Draw thick edge on the inside of the half circle
+\draw [domain = -30.8     : 210.8,  samples = 256, color = facecolor, thick, line width = \rwc] plot ({\ra * cos(\x)}, {\ra * sin(\x)});
+
+% Draw speed markers on the half circle
+\foreach \ix in {0, ..., 8}
+{
+  \foreach \jx in {0, ..., 1}
+  {
+    \ifthenelse{\jx = 0}
+    {
+      \draw [domain = \ra : \rb, samples = 2, color = facecolor, thick, line width = \rwa]
+        plot ({\x * cos(-30 + 30 * \ix)}, {\x * sin(-30 + 30 * \ix)});
+    }
+    {
+    }
+  }
+}
+
+% Draw numbers
+\node [color = facecolor, scale = 0.8] at ({\rt*cos(210)},{\rt*sin(210)-0.05})
+  {$0$};
+
+\node [color = facecolor, scale = 0.8] at ({\rt*cos(90)},{\rt*sin(90)})
+  {$1$};
+
+\node [color = facecolor, scale = 0.8] at ({\rt*cos(-30)-0.05},{\rt*sin(-30)-0.05})
+  {$\infty$};
+
+\node [color = facecolor, scale = 0.8] at ({\rtb*cos(150)},{\rtb*sin(150)})
+  {\tiny $\frac{1}{\sqrt{\kern-0.5pt 2}}$};
+
+\node [color = facecolor, scale = 0.8] at ({\rtb*cos(30)},{\rtb*sin(30)})
+  {\tiny $\sqrt{\kern-0.5pt 2}$};
+
+% Draw circle for pin
+\draw [color = black!10, fill = black!30] (0,0) circle (0.135);
+
+% Draw blurred-ish pin
+\foreach \th/\colo/\opac in {190/red!50!facecolor/0.1, 195/red!50!facecolor/0.3, 200/red!50!black/1.0}
+{
+  \fill [color = \colo, fill opacity = \opac]
+    (180 - \th + 8 : 0.1) arc (180 - \th + 8 : 180 - \th + 344 : 0.1)
+      -- (180 - \th - 0.5 : \rd)
+      -- (180 - \th + 0.5 : \rd)
+      -- cycle;
+}
+
+% Draw FLINT
+\node [color = facecolor, scale = 1.75] at ({0}, {-1})
+  {\large \bfseries FLINT};
