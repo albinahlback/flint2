@@ -587,6 +587,36 @@ mp_limb_t mpn_modexact_1_odd(mp_srcptr, mp_size_t, mp_limb_t);
 mp_limb_t mpn_invert_limb(mp_limb_t);
 #endif
 
+#define mpn_invert __gmpn_invert
+void mpn_invert(mp_ptr, mp_srcptr, mp_size_t, mp_ptr);
+
+typedef void (* flint_mpn_invert_func_t)(mp_ptr, mp_srcptr);
+
+FLINT_DLL extern const flint_mpn_invert_func_t flint_mpn_invert_func_tab[];
+
+#if FLINT_HAVE_ASSEMBLY_x86_64_adx
+# define FLINT_MPN_INVERT_FUNC_TAB_WIDTH 1
+#else
+# define FLINT_MPN_INVERT_FUNC_TAB_WIDTH 1
+#endif
+
+#define FLINT_HAVE_INVERT_FUNC(n) ((n) <= FLINT_MPN_INVERT_FUNC_TAB_WIDTH)
+#define FLINT_MPN_INVERT_HARD(ip, dp, n) flint_mpn_invert_func_tab[n](ip, dp)
+
+void _flint_mpn_invert(mp_ptr, mp_srcptr, mp_size_t);
+
+MPN_EXTRAS_INLINE
+void flint_mpn_invert(mp_ptr ip, mp_srcptr dp, mp_size_t n)
+{
+    FLINT_ASSERT(ip != dp);
+    FLINT_ASSERT(dp[n - 1] >> (FLINT_BITS - 1));
+
+    if (FLINT_HAVE_INVERT_FUNC(n))
+        FLINT_MPN_INVERT_HARD(ip, dp, n);
+    else
+        _flint_mpn_invert(ip, dp, n);
+}
+
 mp_limb_t flint_mpn_preinv1(mp_limb_t d, mp_limb_t d2);
 void flint_mpn_preinvn(mp_ptr dinv, mp_srcptr d, mp_size_t n);
 

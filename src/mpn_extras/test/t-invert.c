@@ -13,51 +13,47 @@
 #include "mpn_extras.h"
 
 #define N_MIN 1
-#define N_MAX 30
+#define N_MAX 50
 
-TEST_FUNCTION_START(flint_mpn_mullow_n, state)
+TEST_FUNCTION_START(flint_mpn_invert, state)
 {
     slong ix;
     int result;
-
-    mp_ptr rp, rpf, xp, yp;
+    mp_ptr scratch = flint_malloc(sizeof(mp_limb_t) * N_MAX);
 
     for (ix = 0; ix < 100000 * flint_test_multiplier(); ix++)
     {
-        mp_limb_t ret;
+        mp_ptr ip0, ip1, dp;
         mp_size_t n;
 
         n = N_MIN + n_randint(state, N_MAX - N_MIN + 1);
 
-        rp = flint_malloc(sizeof(mp_limb_t) * n);
-        rpf = flint_malloc(2 * sizeof(mp_limb_t) * n);
-        xp = flint_malloc(sizeof(mp_limb_t) * n);
-        yp = flint_malloc(sizeof(mp_limb_t) * n);
+        ip0 = flint_malloc(sizeof(mp_limb_t) * n);
+        ip1 = flint_malloc(sizeof(mp_limb_t) * n);
+        dp = flint_malloc(sizeof(mp_limb_t) * n);
 
-        mpn_random2(xp, n);
-        mpn_random2(yp, n);
+        mpn_random2(dp, n);
+        dp[n - 1] |= (UWORD(1) << (FLINT_BITS - 1));
 
-        ret = flint_mpn_mullow_n(rp, xp, yp, n);
-        flint_mpn_mul_n(rpf, xp, yp, n);
+        flint_mpn_invert(ip0, dp, n);
+        mpn_invert(ip1, dp, n, scratch);
 
-        result = (mpn_cmp(rp, rpf, n) == 0 && ret == rpf[n]);
+        result = (mpn_cmp(ip0, ip1, n) == 0);
         if (!result)
             TEST_FUNCTION_FAIL(
                     "ix = %wd\n"
                     "n = %wd\n"
-                    "xp = %{ulong*}\n"
-                    "yp = %{ulong*}\n"
-                    "Exp ret: %{ulong}\n"
-                    "Got ret: %{ulong}\n"
+                    "dp = %{ulong*}\n"
                     "Expected: %{ulong*}\n"
                     "Got:      %{ulong*}\n",
-                    ix, n, xp, n, yp, n, rpf[n], ret, rpf, n, rp, n);
+                    ix, n, dp, n, ip1, n, ip0, n);
 
-        flint_free(rp);
-        flint_free(rpf);
-        flint_free(xp);
-        flint_free(yp);
+        flint_free(ip0);
+        flint_free(ip1);
+        flint_free(dp);
     }
+
+    flint_free(scratch);
 
     TEST_FUNCTION_END(state);
 }
