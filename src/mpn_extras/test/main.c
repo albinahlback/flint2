@@ -20,6 +20,7 @@
 #include "t-divrem_preinvn.c"
 #include "t-fmms1.c"
 #include "t-gcd_full.c"
+#include "t-invert.c"
 #include "t-mod_preinvn.c"
 #include "t-mul.c"
 #include "t-mul_n.c"
@@ -45,6 +46,7 @@ test_struct tests[] =
     TEST_FUNCTION(flint_mpn_divrem_preinvn),
     TEST_FUNCTION(flint_mpn_fmms1),
     TEST_FUNCTION(flint_mpn_gcd_full),
+    TEST_FUNCTION(flint_mpn_invert),
     TEST_FUNCTION(flint_mpn_mod_preinvn),
     TEST_FUNCTION(flint_mpn_mul),
     TEST_FUNCTION(flint_mpn_mul_n),

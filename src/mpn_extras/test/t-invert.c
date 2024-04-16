@@ -35,8 +35,8 @@ TEST_FUNCTION_START(flint_mpn_invert, state)
         mpn_random2(dp, n);
         dp[n - 1] |= (UWORD(1) << (FLINT_BITS - 1));
 
-        flint_mpn_invert(ip0, dp, n);
         mpn_invert(ip1, dp, n, scratch);
+        flint_mpn_invert(ip0, dp, n);
 
         result = (mpn_cmp(ip0, ip1, n) == 0);
         if (!result)

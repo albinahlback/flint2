@@ -34,7 +34,7 @@ PROLOGUE(flint_mpn_invert_1)
 	mov	$-1, %rdx
 	mov	$-1, %rax
 	sub	0*8(dp), %rdx
-	div	0*8(dp)
+	divq	0*8(dp)
 	mov	%rax, 0*8(ip)
 	ret
 EPILOGUE()
