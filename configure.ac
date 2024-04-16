@@ -1016,6 +1016,11 @@ AC_SEARCH_LIBS([__gmpn_mul_basecase],[gmp],
     [AC_MSG_ERROR([`mpn_mul_basecase' was not found in the GMP library, which is required by FLINT.
 Please submit a bug report to <https://github.com/flintlib/flint/issues/>.])])
 
+AC_SEARCH_LIBS([__gmpn_invert],[gmp],
+    [],
+    [AC_MSG_ERROR([`mpn_invert' was not found in the GMP library, which is required by FLINT.
+Please submit a bug report to <https://github.com/flintlib/flint/issues/>.])])
+
 if test "$enable_gmp_internals" = "yes";
 then
     dnl The following functions should exist in the GMP library regardless.
