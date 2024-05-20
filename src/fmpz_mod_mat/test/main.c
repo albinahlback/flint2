@@ -11,7 +11,7 @@
 
 /* Include functions *********************************************************/
 
-#include "t-add_sub_neg.c"
+#include "t-aors.c"
 #include "t-can_solve.c"
 #include "t-charpoly.c"
 #include "t-det.c"
@@ -42,7 +42,7 @@
 
 test_struct tests[] =
 {
-    TEST_FUNCTION(fmpz_mod_mat_add_sub_neg),
+    TEST_FUNCTION(fmpz_mod_mat_aors),
     TEST_FUNCTION(fmpz_mod_mat_can_solve),
     TEST_FUNCTION(fmpz_mod_mat_charpoly),
     TEST_FUNCTION(fmpz_mod_mat_det),

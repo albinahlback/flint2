@@ -47,6 +47,8 @@ void fmpz_mod_mat_init_set(fmpz_mod_mat_t mat, const fmpz_mod_mat_t src, const f
 
 void fmpz_mod_mat_clear(fmpz_mod_mat_t mat, const fmpz_mod_ctx_t FLINT_UNUSED(ctx));
 
+int fmpz_mod_mat_is_canonical(const fmpz_mod_mat_t am, const fmpz_mod_ctx_t ctx);
+
 /* Basic manipulation  ********************************************************/
 
 FMPZ_MOD_MAT_INLINE

@@ -23,9 +23,7 @@
     * Assumes that the operations tested are boiler-plate, that is, they are a
       simple double for-loop with operations over base ring.
     * Ring has a context-structure.
-
-   Notes:
-    * We check that neg and add are not null-operations.
+    * Add, sub and neg on matrices are not null-operations.
 */
 #define _MAT_AORS_TEST_CTX(                                             \
             name,                                                       \
@@ -34,13 +32,14 @@
             M_MIN, M_MAX,                                               \
             N_MIN, N_MAX,                                               \
             T_ctx_t,                                                    \
-            T_ctx_init, /* Must be an expression containing `ctx' */    \
+            T_ctx_init_rand, /* Must be an expression containing `ctx' */ \
             T_ctx_clear,                                                \
             T,                                                          \
             T_init,                                                     \
             T_randtest,                                                 \
             T_add, T_sub, T_neg,                                        \
             T_is_zero, T_equal,                                         \
+            T_is_canonical,                                             \
             T_clear                                                     \
         )                                                               \
 TEST_FUNCTION_START(name, state)                                        \
@@ -57,7 +56,7 @@ TEST_FUNCTION_START(name, state)                                        \
         m = M_MIN + n_randint(state, M_MAX - M_MIN + 1);                \
         n = N_MIN + n_randint(state, N_MAX - N_MIN + 1);                \
                                                                         \
-        T_ctx_init; /* Initializes ctx */                               \
+        T_ctx_init_rand; /* Initializes ctx */                          \
                                                                         \
         T_init(am, m, n, ctx);                                          \
         T_init(bm, m, n, ctx);                                          \
@@ -67,34 +66,25 @@ TEST_FUNCTION_START(name, state)                                        \
         T_randtest(bm, state, ctx);                                     \
         T_randtest(cm, state, ctx);                                     \
                                                                         \
-        /* Check left-aliasing of add and sub, and that neg and add are \
-           not null-operations. */                                      \
+        /* Check left-aliasing of add and sub */                        \
         T_neg(cm, am, ctx);                                             \
-                                                                        \
-        /* am = 0 and am = cm, or am != 0 and am != cm */               \
-        /* This asserts that neg != null */                             \
-        result = ((T_is_zero(am) == 0) ^ (T_equal(am, cm) != 0));       \
-                                                                        \
+        result = T_is_canonical(cm, ctx);                               \
         T_add(am, am, bm, ctx);                                         \
-                                                                        \
-        /* am = 0 and am = bm, or am != 0 and am != bm */               \
-        /* This asserts that add != null */                             \
-        result = result && ((T_is_zero(am) == 0) ^ (T_equal(am, bm) != 0)); \
-                                                                        \
+        result = result && T_is_canonical(am, ctx);                     \
         T_sub(am, am, bm, ctx);                                         \
+        result = result && T_is_canonical(am, ctx);                     \
         T_neg(am, am, ctx);                                             \
-                                                                        \
-        /* Assert that am = cm */                                       \
-        result = result && T_equal(am, cm);                             \
+        result = result && T_is_canonical(am, ctx);                     \
+        result = result && T_equal(am, cm, ctx);                        \
                                                                         \
         /* Check right-aliasing of add and sub. */                      \
         T_neg(cm, bm, ctx);                                             \
+        result = result && T_is_canonical(cm, ctx);                     \
         T_add(bm, am, bm, ctx);                                         \
+        result = result && T_is_canonical(bm, ctx);                     \
         T_sub(bm, am, bm, ctx);                                         \
-        T_neg(bm, bm, ctx);                                             \
-                                                                        \
-        /* Assert that bm = cm */                                       \
-        result = result && T_equal(am, cm);                             \
+        result = result && T_is_canonical(bm, ctx);                     \
+        result = result && T_equal(bm, cm, ctx);                        \
                                                                         \
         if (!result)                                                    \
             TEST_FUNCTION_FAIL("Add-sub-neg test failed.\n");           \
@@ -108,5 +98,22 @@ TEST_FUNCTION_START(name, state)                                        \
                                                                         \
     TEST_FUNCTION_END(state);                                           \
 }
+
+#define MAT_AORS_TEST_CTX(name, state, T, T_ctx_init_rand) \
+    _MAT_AORS_TEST_CTX(                             \
+            name, state,                            \
+            100,                                    \
+            0, 10,                                  \
+            0, 10,                                  \
+            T##_ctx_t,                              \
+            T_ctx_init_rand,                        \
+            T##_ctx_clear,                          \
+            T##_mat_t,                              \
+            T##_mat_init,                           \
+            T##_mat_randtest,                       \
+            T##_mat_add, T##_mat_sub, T##_mat_neg,  \
+            T##_mat_is_zero, T##_mat_equal,         \
+            T##_mat_is_canonical,                   \
+            T##_mat_clear)
 
 #endif
